@@ -42,6 +42,9 @@ işaretlenir. Menü çubuğunda şarj varken watt değeri görünür.
 Derler, `Kablo Kaşifi.app` paketini üretir, `/Applications` içine kopyalar ve çalıştırır.
 Herhangi bir özel izin gerekmez.
 
+İstersen ad-hoc yerine sabit bir yerel imza kimliğiyle imzalayabilirsin
+(`./Scripts/setup-signing.sh` — bir kez yeter; `build.sh` varsa onu kullanır).
+
 Terminalden hızlı bakış:
 
 ```bash
@@ -74,6 +77,7 @@ Sources/KabloKasifi/
   Models/Connection.swift          Satır ve yorum modelleri
   Views/PanelView.swift            Menü çubuğu paneli
   Views/RenderPreview.swift        Paneli PNG'ye çizen geliştirme yardımcısı
+Scripts/setup-signing.sh           Sabit yerel imza kimliği oluşturur
 ```
 
 ### Geliştirme
