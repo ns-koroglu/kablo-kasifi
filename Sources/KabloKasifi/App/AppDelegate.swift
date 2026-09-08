@@ -11,12 +11,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
             return
         }
+        if args.contains("--doctor") {
+            let text = SystemProbe.doctor()
+            print(text)
+            try? text.write(toFile: "/tmp/kk-doctor.txt", atomically: true, encoding: .utf8)
+            NSApp.terminate(nil)
+            return
+        }
         if args.contains("--print") {
             let r = SystemProbe.probe()
+            var out = ""
             for c in r.all {
-                print("• [\(c.kind.rawValue)] \(c.title) \(c.badge.map { "(\($0))" } ?? "") — \(c.subtitle)")
-                for v in c.verdicts { print("    - \(v.text)") }
+                out += "• [\(c.kind.rawValue)] \(c.title) \(c.badge.map { "(\($0))" } ?? "") — \(c.subtitle)\n"
+                for v in c.verdicts { out += "    - \(v.text)\n" }
             }
+            out += "\n" + SystemProbe.doctor() + "\n" 
+            print(out)
+            try? out.write(toFile: "/tmp/kk-print.txt", atomically: true, encoding: .utf8)
             NSApp.terminate(nil)
             return
         }

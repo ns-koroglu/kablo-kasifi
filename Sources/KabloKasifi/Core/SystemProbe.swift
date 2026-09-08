@@ -1,304 +1,169 @@
 import Foundation
-import IOKit.ps
+import CoreGraphics
+import AppKit
 
 /// Sistemden ham veriyi toplar ve düz Türkçe yorumlara çevirir.
+///
+/// Sürüm dayanıklılığı: USB, güç ve ekran bilgisi doğrudan native API'lerden
+/// (IOKit, CoreGraphics) okunur — bunlar macOS sürümleri arasında değişmiyor.
+/// `system_profiler` yalnızca Thunderbolt için kullanılır ve veri tipi adı
+/// çalışma anında keşfedilir; bulunamazsa bölüm sessizce boş kalmaz, uyarı basılır.
+/// (macOS 26'da `SPUSBDataType` → `SPUSBHostDataType` değişikliği tam olarak
+/// böyle bir sessiz boşluğa yol açmıştı.)
 enum SystemProbe {
 
-    // MARK: - Genel giriş
+    // MARK: - Giriş
 
     static func probe() -> ProbeResult {
-        guard let raw = runProfiler() else {
-            var r = ProbeResult()
-            r.failure = "Sistem bilgisi okunamadı (system_profiler yanıt vermedi)."
-            return r
-        }
         var result = ProbeResult()
-        result.ports = parseThunderbolt(raw["SPThunderboltDataType"] as? [[String: Any]] ?? [])
-        result.power = parsePower(raw["SPPowerDataType"] as? [[String: Any]] ?? [])
-        result.devices = parseUSB(raw["SPUSBDataType"] as? [[String: Any]] ?? [])
-        result.displays = parseDisplays(raw["SPDisplaysDataType"] as? [[String: Any]] ?? [])
+        let usb = USBProbe.devices()
+        result.devices = usbRows(usb)
+        result.power = powerRows()
+        result.displays = displayRows()
+        let (ports, warning) = thunderboltRows()
+        result.ports = ports
+        result.failure = warning
         return result
     }
 
-    private static func runProfiler() -> [String: Any]? {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
-        p.arguments = ["-json", "SPUSBDataType", "SPThunderboltDataType",
-                       "SPPowerDataType", "SPDisplaysDataType"]
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = FileHandle.nullDevice
-        do { try p.run() } catch { return nil }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        p.waitUntilExit()
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-    }
+    // MARK: - USB (IOKit)
 
-    // MARK: - Hız yorumlama
-
-    /// "up_to_10Gb_per_sec" / "Up to 40 Gb/s" → (10.0, "USB 3.2 Gen 2")
-    static func parseSpeed(_ raw: String?) -> (gbps: Double?, label: String) {
-        guard let raw, !raw.isEmpty else { return (nil, "bilinmiyor") }
-        let s = raw.lowercased()
-        var gbps: Double?
-        if s.contains("1.5mb") || s.contains("low_speed") { gbps = 0.0015 }
-        else if s.contains("12mb") { gbps = 0.012 }
-        else if s.contains("480mb") { gbps = 0.48 }
-        else if s.contains("5gb") { gbps = 5 }
-        else if s.contains("10gb") { gbps = 10 }
-        else if s.contains("20gb") { gbps = 20 }
-        else if s.contains("40gb") || s.contains("40 gb") { gbps = 40 }
-        else if s.contains("80gb") || s.contains("80 gb") { gbps = 80 }
-
-        switch gbps {
-        case .some(let g) where g <= 0.012: return (g, "USB 1.x")
-        case .some(0.48): return (0.48, "USB 2.0 · 480 Mb/s")
-        case .some(5): return (5, "USB 3.0 · 5 Gb/s")
-        case .some(10): return (10, "USB 3.2 Gen 2 · 10 Gb/s")
-        case .some(20): return (20, "USB 3.2 Gen 2x2 · 20 Gb/s")
-        case .some(40): return (40, "USB4 / Thunderbolt · 40 Gb/s")
-        case .some(80): return (80, "Thunderbolt 5 · 80 Gb/s")
-        default: return (gbps, raw)
+    private static func usbRows(_ devices: [USBDeviceInfo]) -> [Connection] {
+        devices.map { device in
+            let gbps = device.linkGbps
+            var c = Connection(kind: .usb,
+                               title: device.name,
+                               subtitle: subtitle(for: device, in: devices),
+                               badge: badge(for: gbps),
+                               gbps: gbps)
+            c.icon = device.isHub ? "point.3.connected.trianglepath.dotted" : nil
+            c.verdicts = verdicts(for: device, in: devices)
+            return c
         }
     }
 
+    private static func subtitle(for device: USBDeviceInfo, in all: [USBDeviceInfo]) -> String {
+        var parts: [String] = []
+        if !device.vendor.isEmpty { parts.append(device.vendor) }
+        parts.append(device.usbVersionText + " aygıtı")
+        if let parent = USBProbe.parent(of: device, in: all) {
+            parts.append("\(parent.name) üzerinden")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private static func verdicts(for device: USBDeviceInfo, in all: [USBDeviceInfo]) -> [Verdict] {
+        var out: [Verdict] = []
+        let link = device.linkGbps ?? 0
+        let capability = device.capabilityGbps ?? 0
+        let parent = USBProbe.parent(of: device, in: all)
+
+        if device.isHub {
+            out.append(Verdict(level: link >= 5 ? .good : .info,
+                               text: link >= 5
+                                   ? "Hub \(speedText(link)) hızında bağlı; altındaki aygıtlar bu bant genişliğini paylaşır."
+                                   : "Hub USB 2.0 hızında (480 Mb/s) bağlı; altına taktığın her aygıt bu hızla sınırlanır."))
+            return out
+        }
+
+        if link >= 5 {
+            out.append(Verdict(level: .good,
+                               text: "\(speedText(link)) hızında bağlı — aygıt, kablo ve port tam kapasite çalışıyor."))
+        } else if capability <= 0.48 {
+            // Suçlu kablo değil, aygıtın kendisi
+            out.append(Verdict(level: .info,
+                               text: "Aygıtın kendisi \(device.usbVersionText) — 480 Mb/s onun tavanı. Kablo veya port suçlu değil."))
+        } else if let parent, (parent.linkGbps ?? 0) < 5 {
+            out.append(Verdict(level: .warn,
+                               text: "Aygıt USB 3.x destekliyor ama 480 Mb/s'de bağlı. Sınırlayan, üstündeki \(parent.name) (USB 2.0 hızında)."))
+        } else {
+            out.append(Verdict(level: .warn,
+                               text: "Aygıt USB 3.x destekliyor ama yalnızca 480 Mb/s'de bağlanmış. Kablo büyük ihtimalle sadece şarj/USB 2.0 kablosu — veri kablosuyla 10 kat hızlanır."))
+        }
+        return out
+    }
+
+    private static func speedText(_ gbps: Double) -> String {
+        if gbps >= 40 { return "40 Gb/s (USB4/Thunderbolt)" }
+        if gbps >= 20 { return "20 Gb/s (USB 3.2 Gen 2x2)" }
+        if gbps >= 10 { return "10 Gb/s (USB 3.2 Gen 2)" }
+        if gbps >= 5 { return "5 Gb/s (USB 3.0)" }
+        if gbps >= 0.48 { return "480 Mb/s (USB 2.0)" }
+        return "\(Int(gbps * 1000)) Mb/s"
+    }
+
     static func badge(for gbps: Double?) -> String? {
-        guard let g = gbps else { return nil }
+        guard let g = gbps, g > 0 else { return nil }
         if g < 1 { return "\(Int(g * 1000)) Mb/s" }
         return "\(Int(g)) Gb/s"
     }
 
-    // MARK: - Thunderbolt / USB4 portları
+    // MARK: - Güç (IOKit)
 
-    private static func parseThunderbolt(_ buses: [[String: Any]]) -> [Connection] {
+    private static func powerRows() -> [Connection] {
         var out: [Connection] = []
+        let battery = PowerProbe.battery()
 
-        for bus in buses {
-            // Her veri yolunun altındaki yuvalar: "receptacle_1_tag", "receptacle_2_tag", …
-            let receptacles = bus.filter { $0.key.hasPrefix("receptacle_") }
-                .compactMap { $0.value as? [String: Any] }
-            let connectedDevices = (bus["_items"] as? [[String: Any]]) ?? []
+        var charge = Connection(kind: .power, title: "Şarj", icon: "bolt.fill")
+        if let adapter = PowerProbe.adapter() {
+            charge.subtitle = adapter.name ?? adapter.description ?? "Güç adaptörü"
+            let negotiated = adapter.negotiatedWatts
+            charge.badge = negotiated.map { "\(Int($0.rounded())) W" }
+                ?? adapter.watts.map { "\($0) W" }
 
-            for rec in receptacles {
-                let idText = (rec["receptacle_id_key"] as? String) ?? "?"
-                let status = (rec["receptacle_status_key"] as? String) ?? ""
-                let speedRaw = rec["current_speed_key"] as? String
-                let speed = parseSpeed(speedRaw)
-                let isEmpty = status.contains("no_devices_connected")
-
-                var c = Connection(kind: .port,
-                                   title: "Port \(idText)",
-                                   subtitle: isEmpty
-                                        ? "Boş · \(badge(for: speed.gbps) ?? "") hıza kadar destekler"
-                                        : "Aygıt bağlı",
-                                   badge: isEmpty ? nil : badge(for: speed.gbps),
-                                   gbps: isEmpty ? nil : speed.gbps,
-                                   isEmptyPort: isEmpty)
-
-                if isEmpty {
-                    c.verdicts = [Verdict(level: .info,
-                                          text: "Bu port boş. Kablo taktığında burada ne taşıdığını yazacağım.")]
-                } else if let g = speed.gbps, g >= 40 {
-                    c.verdicts = [Verdict(level: .good,
-                                          text: "40 Gb/s bağlantı kuruldu — kablon tam hızlı Thunderbolt/USB4 kablosu.")]
-                } else {
-                    c.verdicts = [Verdict(level: .warn,
-                                          text: "Bağlantı \(speed.label). Kablo pasif ya da düşük hızlı olabilir; tam hız için sertifikalı Thunderbolt/USB4 kablosu gerekir.")]
-                }
-                out.append(c)
-            }
-
-            for device in connectedDevices {
-                let name = (device["device_name_key"] as? String) ?? "Bilinmeyen aygıt"
-                let vendor = (device["vendor_name_key"] as? String) ?? ""
-                let speed = parseSpeed(device["current_speed_key"] as? String)
-                var c = Connection(kind: .port,
-                                   title: name,
-                                   subtitle: vendor.isEmpty ? "Thunderbolt aygıtı" : vendor,
-                                   badge: badge(for: speed.gbps),
-                                   gbps: speed.gbps)
-                c.verdicts.append(Verdict(level: speed.gbps.map { $0 >= 40 } == true ? .good : .info,
-                                          text: "Thunderbolt bağlantısı: \(speed.label)."))
-                out.append(c)
-            }
-        }
-        return out.sorted { ($0.title) < ($1.title) }
-    }
-
-    // MARK: - USB aygıtları
-
-    private static func parseUSB(_ buses: [[String: Any]]) -> [Connection] {
-        var out: [Connection] = []
-
-        func walk(_ items: [[String: Any]], depth: Int) {
-            for item in items {
-                let name = (item["_name"] as? String) ?? "USB aygıtı"
-                let isHubLike = name.lowercased().contains("hub")
-                let speed = parseSpeed(item["device_speed"] as? String)
-                let vendor = (item["manufacturer"] as? String) ?? ""
-
-                // Yalnızca gerçek aygıtları listele (kök veri yollarını değil)
-                if item["device_speed"] != nil {
-                    var c = Connection(kind: .usb,
-                                       title: name,
-                                       subtitle: vendor,
-                                       badge: badge(for: speed.gbps),
-                                       gbps: speed.gbps)
-                    c.verdicts.append(speedVerdict(name: name, speed: speed))
-
-                    if let power = item["bus_power_used"] as? String ?? item["bus_power"] as? String {
-                        c.subtitle = [vendor, "\(power) mA"].filter { !$0.isEmpty }.joined(separator: " · ")
-                    }
-                    if isHubLike {
-                        c.verdicts.append(Verdict(level: .info,
-                                                  text: "Bu bir hub; altına taktığın aygıtlar bant genişliğini paylaşır."))
-                    }
-                    out.append(c)
-                }
-                if let children = item["_items"] as? [[String: Any]] {
-                    walk(children, depth: depth + 1)
-                }
-            }
-        }
-        walk(buses, depth: 0)
-        return out
-    }
-
-    private static func speedVerdict(name: String, speed: (gbps: Double?, label: String)) -> Verdict {
-        let lower = name.lowercased()
-        let looksLikeStorage = ["ssd", "disk", "drive", "nvme", "hdd", "t5", "t7", "t9",
-                                "sandisk", "samsung", "crucial", "lacie", "wd "]
-            .contains { lower.contains($0) }
-
-        guard let g = speed.gbps else {
-            return Verdict(level: .info, text: "Bağlantı hızı okunamadı.")
-        }
-        if g <= 0.48 {
-            if looksLikeStorage {
-                return Verdict(level: .warn,
-                               text: "Depolama aygıtı USB 2.0 hızında (480 Mb/s) bağlı. Kablon büyük ihtimalle sadece şarj/USB 2.0 kablosu — veri kablosuyla 10 kat hızlanır.")
-            }
-            return Verdict(level: .info,
-                           text: "USB 2.0 hızında bağlı (480 Mb/s). Klavye, fare, adaptör gibi aygıtlar için bu normal.")
-        }
-        if g >= 10 {
-            return Verdict(level: .good, text: "Hızlı bağlantı: \(speed.label). Kablo ve port tam kapasite çalışıyor.")
-        }
-        return Verdict(level: .good, text: "Bağlantı: \(speed.label).")
-    }
-
-    // MARK: - Ekranlar
-
-    private static func parseDisplays(_ gpus: [[String: Any]]) -> [Connection] {
-        var out: [Connection] = []
-        for gpu in gpus {
-            let screens = (gpu["spdisplays_ndrvs"] as? [[String: Any]]) ?? []
-            for screen in screens {
-                let connection = (screen["spdisplays_connection_type"] as? String) ?? ""
-                let isInternal = connection.contains("internal")
-                guard !isInternal else { continue }
-
-                let name = (screen["_name"] as? String) ?? "Harici ekran"
-                let resolution = (screen["_spdisplays_resolution"] as? String)
-                    ?? (screen["_spdisplays_pixels"] as? String) ?? ""
-                var c = Connection(kind: .display,
-                                   title: name,
-                                   subtitle: resolution,
-                                   badge: "video")
-                c.verdicts.append(Verdict(level: .good,
-                                          text: "Bu kablo görüntü taşıyor\(resolution.isEmpty ? "" : ": \(resolution)")."))
-                if connection.contains("displayport") || connection.contains("dp") {
-                    c.verdicts.append(Verdict(level: .info, text: "Bağlantı DisplayPort üzerinden kuruldu."))
-                } else if connection.contains("hdmi") {
-                    c.verdicts.append(Verdict(level: .info, text: "Bağlantı HDMI üzerinden kuruldu."))
-                }
-                out.append(c)
-            }
-        }
-        return out
-    }
-
-    // MARK: - Şarj
-
-    private static func parsePower(_ items: [[String: Any]]) -> [Connection] {
-        var battery: [String: Any] = [:]
-        var charger: [String: Any] = [:]
-        for item in items {
-            switch item["_name"] as? String {
-            case "spbattery_information": battery = item
-            case "sppower_ac_charger_information": charger = item
-            default: break
-            }
-        }
-
-        let chargeInfo = battery["sppower_battery_charge_info"] as? [String: Any] ?? [:]
-        let healthInfo = battery["sppower_battery_health_info"] as? [String: Any] ?? [:]
-        let percent = chargeInfo["sppower_battery_state_of_charge"] as? Int
-        let isCharging = (chargeInfo["sppower_battery_is_charging"] as? String) == "TRUE"
-        let connected = (charger["sppower_battery_charger_connected"] as? String) == "TRUE"
-
-        let adapter = adapterDetails()
-        var out: [Connection] = []
-
-        var c = Connection(kind: .power, title: "Şarj")
-        if !connected && adapter == nil {
-            c.subtitle = "Adaptör bağlı değil"
-            c.verdicts.append(Verdict(level: .info,
-                                      text: "Şarj kablosu takılı değil. Taktığında adaptörün kaç watt verdiğini ve kablonun bunu sınırlayıp sınırlamadığını buradan göreceksin."))
-        } else {
-            let labelWatts = adapter?.watts ?? Int((charger["sppower_ac_charger_watts"] as? String) ?? "") ?? 0
-            let negotiated = adapter?.negotiatedWatts
-            let name = adapter?.name
-                ?? (charger["sppower_ac_charger_name"] as? String)
-                ?? "Güç adaptörü"
-
-            c.subtitle = name
-            c.badge = labelWatts > 0 ? "\(labelWatts) W" : nil
-
-            if let neg = negotiated, labelWatts > 0 {
-                let ratio = neg / Double(labelWatts)
-                let negText = String(format: "%.1f", neg)
+            if let label = adapter.labelWatts, let neg = negotiated {
+                let negText = String(format: "%.0f", neg)
+                let ratio = neg / Double(label)
                 if ratio >= 0.88 {
-                    c.verdicts.append(Verdict(level: .good,
-                                              text: "\(labelWatts) W adaptör tam güçte veriyor (şu an \(negText) W). Kablo bu gücü taşıyabiliyor."))
-                } else if let p = percent, p >= 90 || !isCharging {
-                    c.verdicts.append(Verdict(level: .info,
-                                              text: "Şu an \(negText) W çekiliyor. Pil %\(p) seviyesinde olduğu için Mac az güç istiyor; bu normal."))
+                    charge.verdicts.append(Verdict(level: .good,
+                        text: "\(label) W adaptör tam güçte veriyor (\(negText) W anlaşıldı). Kablo bu gücü sorunsuz taşıyor."))
+                } else if battery.percent ?? 0 >= 90 || !battery.isCharging {
+                    charge.verdicts.append(Verdict(level: .info,
+                        text: "Şu an \(negText) W çekiliyor. Pil %\(battery.percent ?? 0) seviyesinde olduğu için Mac az güç istiyor; bu normal."))
                 } else {
-                    c.verdicts.append(Verdict(level: .warn,
-                                              text: "Adaptör \(labelWatts) W ama yalnızca \(negText) W geliyor. Kablo düşük güçlü (60 W sınırlı) olabilir ya da tam oturmamış olabilir."))
+                    charge.verdicts.append(Verdict(level: .warn,
+                        text: "Adaptör \(label) W ama yalnızca \(negText) W geliyor. Kablo düşük güçlü (60 W sınırlı) olabilir ya da tam oturmamış olabilir."))
                 }
-            } else if labelWatts > 0 {
-                c.verdicts.append(Verdict(level: .info, text: "\(labelWatts) W adaptör bağlı."))
             }
-
-            if let v = adapter?.voltage, let a = adapter?.current {
-                c.verdicts.append(Verdict(level: .info,
-                                          text: String(format: "Anlaşılan güç profili: %.1f V · %.2f A.", v, a)))
+            if let v = adapter.voltage, let a = adapter.current {
+                charge.verdicts.append(Verdict(level: .info,
+                    text: String(format: "Anlaşılan profil: %.0f V · %.2f A.", v, a)))
             }
+            if adapter.profiles.count > 1 {
+                let list = adapter.profiles
+                    .map { String(format: "%.0fV/%.1fA", $0.volts, $0.amps) }
+                    .joined(separator: " · ")
+                charge.verdicts.append(Verdict(level: .info, text: "Adaptörün sunduğu profiller: \(list)."))
+            }
+        } else {
+            charge.subtitle = "Adaptör bağlı değil"
+            charge.verdicts.append(Verdict(level: .info,
+                text: "Şarj kablosu takılı değil. Taktığında adaptörün kaç watt verdiğini ve kablonun bunu sınırlayıp sınırlamadığını buradan göreceksin."))
         }
-        out.append(c)
+        out.append(charge)
 
-        // Pil özeti
-        if let percent {
+        if let percent = battery.percent {
             var b = Connection(kind: .power, title: "Pil", badge: "%\(percent)",
-                               icon: batteryIcon(percent: percent, charging: isCharging))
-            let cycles = healthInfo["sppower_battery_cycle_count"] as? Int
-            let health = healthInfo["sppower_battery_health"] as? String
-            let maxCap = healthInfo["sppower_battery_health_maximum_capacity"] as? String
+                               icon: batteryIcon(percent: percent, charging: battery.isCharging))
             var parts: [String] = []
-            if let maxCap { parts.append("azami kapasite \(maxCap)") }
-            if let cycles { parts.append("\(cycles) döngü") }
+            if let health = spBatteryHealthText() ?? battery.rawHealthPercent.map({ "%\($0)" }) {
+                parts.append("azami kapasite \(health)")
+            }
+            if let cycles = battery.cycleCount { parts.append("\(cycles) döngü") }
             b.subtitle = parts.joined(separator: " · ")
-            if isCharging {
-                b.verdicts.append(Verdict(level: .good, text: "Şarj oluyor."))
-            } else if connected {
+
+            if battery.isCharging {
+                if let minutes = battery.timeRemainingMinutes, minutes > 0, minutes < 60 * 12 {
+                    b.verdicts.append(Verdict(level: .good, text: "Şarj oluyor — tam dolmasına yaklaşık \(minutes) dakika."))
+                } else {
+                    b.verdicts.append(Verdict(level: .good, text: "Şarj oluyor."))
+                }
+            } else if battery.externalConnected {
                 b.verdicts.append(Verdict(level: .info, text: "Adaptör bağlı ama şu an şarj etmiyor (pil yeterince dolu)."))
             }
-            if health == "Good" || health == "Normal" {
-                b.verdicts.append(Verdict(level: .good, text: "Pil sağlığı iyi durumda."))
-            } else if let health {
-                b.verdicts.append(Verdict(level: .warn, text: "Pil sağlığı: \(health)."))
+            if let raw = battery.rawHealthPercent {
+                b.verdicts.append(Verdict(level: raw >= 80 ? .good : .warn,
+                    text: raw >= 80 ? "Pil sağlığı iyi durumda." : "Pil kapasitesi tasarım değerinin %\(raw)'ine düşmüş; değişim zamanı yaklaşmış olabilir."))
             }
             out.append(b)
         }
@@ -316,27 +181,181 @@ enum SystemProbe {
         }
     }
 
-    // MARK: - IOKit güç adaptörü ayrıntıları
-
-    struct AdapterDetails {
-        var watts: Int?
-        var voltage: Double?     // V
-        var current: Double?     // A
-        var name: String?
-        var negotiatedWatts: Double? {
-            guard let voltage, let current else { return nil }
-            return voltage * current
+    /// Sistem Ayarları'ndaki "azami kapasite" değeri (varsa) — ham orandan farklı olabilir.
+    private static func spBatteryHealthText() -> String? {
+        guard let items = profilerItems(["SPPowerDataType"]).items else { return nil }
+        for item in items where (item["_name"] as? String) == "spbattery_information" {
+            if let health = item["sppower_battery_health_info"] as? [String: Any],
+               let maxCap = health["sppower_battery_health_maximum_capacity"] as? String {
+                return maxCap
+            }
         }
+        return nil
     }
 
-    static func adapterDetails() -> AdapterDetails? {
-        guard let dict = IOPSCopyExternalPowerAdapterDetails()?.takeRetainedValue() as? [String: Any],
-              !dict.isEmpty else { return nil }
-        var a = AdapterDetails()
-        a.watts = dict["Watts"] as? Int
-        if let mv = dict["Voltage"] as? Int { a.voltage = Double(mv) / 1000.0 }
-        if let ma = dict["Current"] as? Int { a.current = Double(ma) / 1000.0 }
-        a.name = (dict["Name"] as? String) ?? (dict["Description"] as? String)
-        return a
+    // MARK: - Ekranlar (CoreGraphics)
+
+    private static func displayRows() -> [Connection] {
+        var count: UInt32 = 0
+        guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return [] }
+        var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
+        guard CGGetOnlineDisplayList(count, &ids, &count) == .success else { return [] }
+
+        var out: [Connection] = []
+        for id in ids.prefix(Int(count)) where CGDisplayIsBuiltin(id) == 0 {
+            let mode = CGDisplayCopyDisplayMode(id)
+            let width = mode?.pixelWidth ?? 0
+            let height = mode?.pixelHeight ?? 0
+            let refresh = mode?.refreshRate ?? 0
+            let name = screenName(for: id) ?? "Harici ekran"
+
+            var resolution = "\(width) × \(height)"
+            if refresh > 0 { resolution += String(format: " @ %.0f Hz", refresh) }
+
+            var c = Connection(kind: .display, title: name, subtitle: resolution, badge: "video")
+            c.verdicts.append(Verdict(level: .good,
+                text: "Bu kablo görüntü taşıyor: \(resolution)."))
+            if CGDisplayIsAsleep(id) != 0 {
+                c.verdicts.append(Verdict(level: .info, text: "Ekran şu an uykuda."))
+            }
+            out.append(c)
+        }
+        return out
+    }
+
+    private static func screenName(for id: CGDirectDisplayID) -> String? {
+        for screen in NSScreen.screens {
+            if let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
+               number.uint32Value == id {
+                return screen.localizedName
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Thunderbolt (system_profiler, tip adı çalışma anında bulunur)
+
+    private static func thunderboltRows() -> ([Connection], String?) {
+        let found = profilerItems(["SPThunderboltDataType", "SPThunderboltHostDataType"])
+        guard let buses = found.items else {
+            return ([], "Bu macOS sürümünde Thunderbolt port verisi okunamadı (beklenen system_profiler veri tipi yok). USB aygıtları ve güç bilgisi etkilenmez.")
+        }
+
+        var out: [Connection] = []
+        for bus in buses {
+            let receptacles = bus.filter { $0.key.hasPrefix("receptacle_") }
+                .compactMap { $0.value as? [String: Any] }
+            let connectedDevices = (bus["_items"] as? [[String: Any]]) ?? []
+
+            for rec in receptacles {
+                let idText = (rec["receptacle_id_key"] as? String) ?? "?"
+                let status = (rec["receptacle_status_key"] as? String) ?? ""
+                let speed = speedFromText(rec["current_speed_key"] as? String)
+                let isEmpty = status.contains("no_devices_connected")
+
+                var c = Connection(kind: .port,
+                                   title: "Port \(idText)",
+                                   subtitle: isEmpty
+                                        ? "Thunderbolt aygıtı yok · \(badge(for: speed) ?? "40 Gb/s") hıza kadar"
+                                        : "Aygıt bağlı",
+                                   badge: isEmpty ? nil : badge(for: speed),
+                                   gbps: isEmpty ? nil : speed,
+                                   isEmptyPort: isEmpty)
+                if isEmpty {
+                    c.verdicts = [Verdict(level: .info,
+                        text: "Bu portta Thunderbolt/USB4 aygıtı yok. Normal USB aygıtları ve hub'lar aşağıdaki \"Bağlı aygıtlar\" bölümünde listelenir.")]
+                } else if let g = speed, g >= 40 {
+                    c.verdicts = [Verdict(level: .good,
+                        text: "40 Gb/s bağlantı kuruldu — kablon tam hızlı Thunderbolt/USB4 kablosu.")]
+                } else {
+                    c.verdicts = [Verdict(level: .warn,
+                        text: "Bağlantı \(speed.map { speedText($0) } ?? "düşük hızda"). Kablo pasif ya da düşük hızlı olabilir.")]
+                }
+                out.append(c)
+            }
+
+            for device in connectedDevices {
+                let name = (device["device_name_key"] as? String) ?? "Thunderbolt aygıtı"
+                let vendor = (device["vendor_name_key"] as? String) ?? ""
+                let speed = speedFromText(device["current_speed_key"] as? String)
+                var c = Connection(kind: .port, title: name,
+                                   subtitle: vendor.isEmpty ? "Thunderbolt aygıtı" : vendor,
+                                   badge: badge(for: speed), gbps: speed)
+                c.verdicts.append(Verdict(level: (speed ?? 0) >= 40 ? .good : .info,
+                    text: "Thunderbolt bağlantısı: \(speed.map { speedText($0) } ?? "hız okunamadı")."))
+                out.append(c)
+            }
+        }
+        return (out.sorted { $0.title < $1.title }, nil)
+    }
+
+    /// "Up to 40 Gb/s" → 40
+    static func speedFromText(_ raw: String?) -> Double? {
+        guard let s = raw?.lowercased() else { return nil }
+        if s.contains("80") { return 80 }
+        if s.contains("40") { return 40 }
+        if s.contains("20") { return 20 }
+        if s.contains("10") { return 10 }
+        if s.contains("5") { return 5 }
+        if s.contains("480") { return 0.48 }
+        return nil
+    }
+
+    // MARK: - system_profiler yardımcıları
+
+    /// Sistemde tanımlı veri tipleri (bir kez okunur).
+    static let availableDataTypes: Set<String> = {
+        guard let out = run("/usr/sbin/system_profiler", ["-listDataTypes"]) else { return [] }
+        return Set(String(decoding: out, as: UTF8.self)
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.hasPrefix("SP") })
+    }()
+
+    /// Adaylardan sistemde var olan ilk veri tipini okur.
+    static func profilerItems(_ candidates: [String]) -> (items: [[String: Any]]?, usedType: String?) {
+        guard let type = candidates.first(where: { availableDataTypes.contains($0) }) else {
+            return (nil, nil)
+        }
+        guard let out = run("/usr/sbin/system_profiler", ["-json", type]),
+              let json = (try? JSONSerialization.jsonObject(with: out)) as? [String: Any],
+              let items = json[type] as? [[String: Any]] else {
+            return (nil, type)
+        }
+        return (items, type)
+    }
+
+    private static func run(_ path: String, _ args: [String]) -> Data? {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = args
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = FileHandle.nullDevice
+        do { try p.run() } catch { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return data
+    }
+
+    // MARK: - Tanılama
+
+    /// Hangi veri kaynağı çalışıyor? (--doctor)
+    static func doctor() -> String {
+        let usb = USBProbe.devices()
+        let adapter = PowerProbe.adapter()
+        let tb = profilerItems(["SPThunderboltDataType", "SPThunderboltHostDataType"])
+        var lines: [String] = []
+        lines.append("macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)")
+        lines.append("USB (IOKit)            : \(usb.count) aygıt")
+        lines.append("Güç (IOKit)            : \(adapter == nil ? "adaptör bağlı değil" : (adapter?.name ?? "bağlı"))")
+        lines.append("Pil (IOKit)            : %\(PowerProbe.battery().percent.map(String.init) ?? "-")")
+        lines.append("Ekran (CoreGraphics)   : \(displayRows().count) harici")
+        lines.append("Thunderbolt            : \(tb.usedType ?? "VERİ TİPİ YOK") → \(tb.items?.count ?? 0) veri yolu")
+        lines.append("system_profiler tipleri: \(availableDataTypes.count) adet")
+        for t in ["SPUSBDataType", "SPUSBHostDataType", "SPThunderboltDataType", "SPPowerDataType", "SPDisplaysDataType"] {
+            lines.append("  \(availableDataTypes.contains(t) ? "✓" : "✗") \(t)")
+        }
+        return lines.joined(separator: "\n")
     }
 }

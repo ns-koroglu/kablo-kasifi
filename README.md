@@ -53,12 +53,52 @@ Terminalden hızlı bakış:
 
 ## Nasıl çalışıyor
 
-- `system_profiler -json SPUSBDataType SPThunderboltDataType SPPowerDataType SPDisplaysDataType`
-  çıktısını okur (aygıt hızları, receptacle durumları, ekranlar, pil).
-- Güç adaptörünün anlaşılan voltaj/akım değerlerini IOKit'ten alır
-  (`IOPSCopyExternalPowerAdapterDetails`), böylece "etikette 67 W yazıyor ama 28 W
-  geliyor" farkını yakalar.
-- Ham değerleri tek cümlelik Türkçe yorumlara çevirir — asıl iş burada.
+Veriler mümkün olan her yerde **native API'lerden** okunur; bunlar macOS sürümleri
+arasında değişmediği için uygulama sürüm güncellemelerine dayanıklıdır:
+
+| Bilgi | Kaynak |
+|---|---|
+| USB aygıtları, hız, USB sürümü, hub ağacı | IOKit — `IOUSBHostDevice` kayıtları (`UsbLinkSpeed`, `bcdUSB`, `locationID`) |
+| Şarj adaptörü, voltaj/akım, PD profilleri, pil | IOKit — `AppleSmartBattery` / `AdapterDetails` |
+| Harici ekranlar | CoreGraphics — `CGGetOnlineDisplayList` |
+| Thunderbolt port durumu | `system_profiler` (tip adı çalışma anında keşfedilir) |
+
+Aygıtın *kendi* yeteneği (`bcdUSB`) ile *gerçekleşen* bağlantı hızı (`UsbLinkSpeed`)
+ayrı ayrı okunduğu için suçluyu doğru gösterebiliyor: yavaşlık aygıtın kendisinden mi,
+araya giren hub'dan mı, yoksa kablodan mı kaynaklanıyor.
+
+### macOS sürüm dayanıklılığı
+
+Bu uygulamanın ilk sürümü `system_profiler SPUSBDataType` kullanıyordu ve **macOS 26'da
+hiçbir USB aygıtını göremiyordu**: Apple bu veri tipini `SPUSBHostDataType` olarak
+yeniden adlandırmış, `system_profiler` de var olmayan tip için hata vermek yerine
+sessizce boş dizi döndürüyordu.
+
+Alınan dersler koda işlendi:
+
+1. Kritik veriler artık `system_profiler` yerine IOKit/CoreGraphics'ten okunuyor.
+2. `system_profiler` gereken tek yerde (Thunderbolt) veri tipi adı
+   `system_profiler -listDataTypes` ile **çalışma anında** doğrulanıyor; birden fazla
+   aday isim deneniyor.
+3. Bir kaynak okunamazsa bölüm sessizce boş kalmıyor — panelde turuncu uyarı çıkıyor.
+4. `--doctor` bayrağı hangi kaynağın çalıştığını tek bakışta gösteriyor:
+
+```bash
+"/Applications/Kablo Kaşifi.app/Contents/MacOS/KabloKasifi" --doctor
+```
+
+```
+macOS: Version 26.6.2 (Build 25G83)
+USB (IOKit)            : 4 aygıt
+Güç (IOKit)            : 96W USB-C Power Adapter
+Ekran (CoreGraphics)   : 0 harici
+Thunderbolt            : SPThunderboltDataType → 2 veri yolu
+  ✗ SPUSBDataType
+  ✓ SPUSBHostDataType
+```
+
+macOS 27'de bir veri tipi daha yeniden adlandırılırsa uygulama çalışmaya devam eder;
+etkilenen tek bölüm (Thunderbolt) uyarı gösterir ve `--doctor` sebebi söyler.
 
 Hiçbir veri dışarı gönderilmez; seri numaraları arayüzde gösterilmez.
 
@@ -73,6 +113,8 @@ Sources/KabloKasifi/
   App/KabloKasifiApp.swift         MenuBarExtra sahnesi
   App/AppDelegate.swift            --print ve --render bayrakları
   Core/SystemProbe.swift           Veri toplama + Türkçe yorum motoru
+  Core/USBProbe.swift              IOKit USB aygıt ağacı (hız, bcdUSB, hub ilişkisi)
+  Core/PowerProbe.swift            IOKit adaptör/pil bilgisi (PD profilleri dahil)
   Core/ProbeStore.swift            Durum, canlı yenileme, yeni aygıt algılama
   Models/Connection.swift          Satır ve yorum modelleri
   Views/PanelView.swift            Menü çubuğu paneli
@@ -85,6 +127,7 @@ Scripts/setup-signing.sh           Sabit yerel imza kimliği oluşturur
 ```bash
 swift build -c release
 ./.build/release/KabloKasifi --print               # terminalde özet
+./.build/release/KabloKasifi --doctor              # veri kaynaklarının durumu
 ./.build/release/KabloKasifi --render /tmp/p.png   # paneli PNG olarak çiz
 ```
 
@@ -97,8 +140,14 @@ language, what the USB-C cable you just plugged in can actually do: negotiated l
 speed per device, whether a cable is limiting charging power (label watts vs. the
 volts × amps actually negotiated, with the "battery is nearly full" case handled
 separately), whether video is flowing, and the state of each Thunderbolt/USB4 port.
-It reads `system_profiler` plus IOKit power-adapter details and turns them into
-one-sentence verdicts. Turkish UI, no special permissions, nothing leaves your Mac.
+It reads USB topology from IOKit (`IOUSBHostDevice`), power from `AppleSmartBattery`
+and displays from CoreGraphics, then turns them into one-sentence verdicts. Because it
+reads each device's own `bcdUSB` capability alongside the negotiated `UsbLinkSpeed`, it
+can tell you whether the bottleneck is the device, an intermediate hub, or the cable.
+Native APIs are preferred over `system_profiler` deliberately: macOS 26 renamed
+`SPUSBDataType` to `SPUSBHostDataType` and the old name silently returned an empty
+array, so the first version saw no USB devices at all. Run `--doctor` to see which
+data source is live on your macOS version. Turkish UI, no special permissions, nothing leaves your Mac.
 
 Build with `./build.sh --install --run` (needs Xcode or Command Line Tools, macOS 14+).
 
