@@ -28,8 +28,9 @@ final class ProbeStore: ObservableObject {
     func refresh() {
         guard !isScanning else { return }
         isScanning = true
+        let strings = L10n.shared.s
         Task.detached(priority: .userInitiated) {
-            let fresh = SystemProbe.probe()
+            let fresh = SystemProbe.probe(strings)
             await MainActor.run { self.apply(fresh) }
         }
     }
@@ -45,8 +46,7 @@ final class ProbeStore: ObservableObject {
 
     /// Önizleme/CLI için eşzamanlı tarama.
     func refreshSynchronously() {
-        let fresh = SystemProbe.probe()
-        apply(fresh)
+        apply(SystemProbe.probe(L10n.shared.s))
     }
 
     /// Panel açıkken canlı takip.

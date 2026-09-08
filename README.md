@@ -33,6 +33,19 @@ hızında çalıştığını gösterir.
 Panel açıkken 4 saniyede bir kendini yeniler; yeni takılan aygıtlar **YENİ** rozetiyle
 işaretlenir. Menü çubuğunda şarj varken watt değeri görünür.
 
+## Diller
+
+🇹🇷 Türkçe (varsayılan) · 🇬🇧 English · 🇩🇪 Deutsch · 🇪🇸 Español · 🇫🇷 Français · 🇮🇹 Italiano · 🇵🇹 Português · 🇷🇺 Русский · 🇨🇳 简体中文 · 🇯🇵 日本語
+
+Uygulama açılışta **sistem diline** göre kendini ayarlar. Sistem dili bu on dilden
+biri değilse **Türkçe** kullanılır. Dili elle de seçebilirsin (menüdeki 🌐 düğmesi
+ya da Ayarlar → Genel → Dil); seçim kaydedilir ve anında uygulanır.
+
+Çeviriler `Sources/*/Localization/` altında, dil başına tek dosya. Metinler tek bir
+`struct` üzerinden tutulduğu için **eksik çeviri mümkün değil**: yeni bir metin
+eklendiğinde çeviri dosyaları derlenmez, tamamlanana kadar hata verir. Yeni bir dil
+eklemek için `AppLanguage`'a bir durum ve karşılık gelen dosyayı eklemek yeterli.
+
 ## Kurulum
 
 ```bash
@@ -118,6 +131,7 @@ Sources/KabloKasifi/
   Core/ProbeStore.swift            Durum, canlı yenileme, yeni aygıt algılama
   Models/Connection.swift          Satır ve yorum modelleri
   Views/PanelView.swift            Menü çubuğu paneli
+  Localization/                    10 dil, dil başına tek dosya (KKStrings)
   Views/RenderPreview.swift        Paneli PNG'ye çizen geliştirme yardımcısı
 Scripts/setup-signing.sh           Sabit yerel imza kimliği oluşturur
 ```
@@ -147,7 +161,9 @@ can tell you whether the bottleneck is the device, an intermediate hub, or the c
 Native APIs are preferred over `system_profiler` deliberately: macOS 26 renamed
 `SPUSBDataType` to `SPUSBHostDataType` and the old name silently returned an empty
 array, so the first version saw no USB devices at all. Run `--doctor` to see which
-data source is live on your macOS version. Turkish UI, no special permissions, nothing leaves your Mac.
+data source is live on your macOS version. Available in 10 languages (Turkish, English, German, Spanish, French, Italian,
+Portuguese, Russian, Chinese, Japanese); it follows your system language and falls
+back to Turkish. No special permissions, nothing leaves your Mac.
 
 Build with `./build.sh --install --run` (needs Xcode or Command Line Tools, macOS 14+).
 

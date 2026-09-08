@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if args.contains("--print") {
-            let r = SystemProbe.probe()
+            let r = SystemProbe.probe(L10n.shared.s)
             var out = ""
             for c in r.all {
                 out += "• [\(c.kind.rawValue)] \(c.title) \(c.badge.map { "(\($0))" } ?? "") — \(c.subtitle)\n"

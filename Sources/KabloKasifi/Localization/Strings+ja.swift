@@ -1,0 +1,68 @@
+import Foundation
+
+extension KKStrings {
+    static let japanese = KKStrings(
+        tagline: "今つないだそのケーブル、実際には何ができる？",
+        scanning: "スキャン中…",
+        noUSBDevices: "USB デバイスなし",
+        usbDeviceCount: "USB デバイス %d 台",
+        displayCount: "ディスプレイ %d 台",
+        refresh: "再スキャン",
+        badgeNew: "新規",
+        launchAtLogin: "ログイン時に起動",
+        quit: "終了",
+        language: "言語",
+        systemLanguage: "システムの言語（%@）",
+        percentFormat: "%d%%",
+
+        sectionDevices: "接続中のデバイス",
+        sectionPower: "電源",
+        sectionDisplays: "ディスプレイ",
+        sectionPorts: "ポート",
+        emptyDevices: "今は USB デバイスがありません。ケーブルをつなげば、何を通せるか教えます。",
+
+        portTitle: "ポート %@",
+        portEmptySubtitle: "空き · 最大 %@",
+        portEmptyNote: "空きポートには Thunderbolt/USB4 デバイスがありません。通常の USB デバイスは上のリストに表示されます。",
+        portDeviceConnected: "デバイス接続中",
+        portFullSpeed: "40 Gb/s でリンクしました — フルスピードの Thunderbolt/USB4 ケーブルです。",
+        portSlow: "リンク速度は %@ です。パッシブまたは低速のケーブルかもしれません。",
+        tbDevice: "Thunderbolt デバイス",
+        tbConnection: "Thunderbolt リンク: %@。",
+
+        charge: "充電",
+        adapterNotConnected: "アダプタ未接続",
+        adapterNotConnectedNote: "充電器がつながっていません。接続すると、何ワット供給されているか、ケーブルが制限していないかがここに出ます。",
+        adapterFullPower: "%d W アダプタがフルパワーで供給中です（%@ W でネゴシエート）。ケーブルは問題なく通しています。",
+        adapterBatteryFull: "現在 %@ W を消費中。バッテリーが %d %% なので Mac があまり電力を必要としていません。正常です。",
+        adapterLimited: "アダプタは %d W ですが %@ W しか来ていません。ケーブルが 60 W 制限か、しっかり挿さっていない可能性があります。",
+        adapterProfile: "ネゴシエート結果: %@ V · %@ A。",
+        adapterProfiles: "アダプタが提供するプロファイル: %@。",
+        powerAdapterFallback: "電源アダプタ",
+
+        battery: "バッテリー",
+        batteryMaxCapacity: "最大容量 %@",
+        batteryCycles: "%d 回の充放電",
+        chargingWithTime: "充電中 — 満充電まで約 %d 分。",
+        charging: "充電中。",
+        connectedNotCharging: "アダプタは接続済みですが、今は充電していません（バッテリーが十分あります）。",
+        batteryHealthGood: "バッテリーの状態は良好です。",
+        batteryHealthWorn: "バッテリー容量が設計値の %d %% まで低下しています。交換時期が近いかもしれません。",
+
+        usbDeviceFallback: "USB デバイス",
+        deviceVersionSuffix: "%@ デバイス",
+        viaParent: "%@ 経由",
+        hubFast: "ハブは %@ で接続されています。その先のデバイスはこの帯域を分け合います。",
+        hubSlow: "ハブが USB 2.0（480 Mb/s）で接続されています。ここに挿したものはすべてこの速度に制限されます。",
+        deviceFast: "%@ で接続 — デバイス・ケーブル・ポートすべてがフル性能で動いています。",
+        deviceOwnLimit: "デバイス自体が %@ です。480 Mb/s はこの機器の上限で、ケーブルやポートのせいではありません。",
+        deviceHubLimit: "デバイスは USB 3.x 対応ですが 480 Mb/s でリンクしています。制限しているのは手前の %@（USB 2.0 動作）です。",
+        deviceCableLimit: "デバイスは USB 3.x 対応ですが 480 Mb/s でしかリンクしていません。ケーブルが充電専用（USB 2.0）の可能性が高く、データ用ケーブルなら 10 倍速くなります。",
+
+        externalDisplay: "外部ディスプレイ",
+        displayCarriesVideo: "このケーブルは映像を通しています: %@。",
+        displaySleeping: "ディスプレイはスリープ中です。",
+
+        thunderboltUnavailable: "この macOS では Thunderbolt ポート情報を読み取れませんでした（想定していた system_profiler のデータ型がありません）。USB デバイスと電源情報には影響しません。"
+    )
+}

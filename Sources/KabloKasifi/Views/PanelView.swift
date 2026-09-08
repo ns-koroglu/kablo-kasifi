@@ -4,6 +4,9 @@ struct PanelView: View {
     /// ImageRenderer ScrollView içeriğini çizemediği için önizlemede kapatılır.
     var scrollable: Bool = true
     @EnvironmentObject var store: ProbeStore
+    @EnvironmentObject var l10n: L10n
+
+    private var s: KKStrings { l10n.s }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -12,7 +15,7 @@ struct PanelView: View {
 
             if scrollable {
                 ScrollView { sections.padding(14) }
-                    .frame(maxHeight: 460)
+                    .frame(maxHeight: 520)
             } else {
                 sections.padding(14)
             }
@@ -23,19 +26,102 @@ struct PanelView: View {
         .frame(width: 380)
         .onAppear { store.startWatching() }
         .onDisappear { store.stopWatching() }
+        .onChange(of: l10n.selection) { _, _ in store.refresh() }
     }
+
+    // MARK: Bölümler — ilgi sırasına göre: aygıtlar, güç, ekranlar, portlar
 
     private var sections: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let failure = store.result.failure {
-                noticeCard(failure, level: .warn)
+                noticeCard(failure)
             }
-            section("Portlar", items: store.result.ports)
-            section("Güç", items: store.result.power)
-            section("Bağlı aygıtlar", items: store.result.devices,
-                    emptyText: "Şu an USB aygıtı yok. Bir kablo tak, ne taşıdığını anlatayım.")
-            section("Ekranlar", items: store.result.displays)
+            section(s.sectionDevices, items: store.result.devices, emptyText: s.emptyDevices)
+            section(s.sectionPower, items: store.result.power)
+            section(s.sectionDisplays, items: store.result.displays)
+            portsSection
         }
+    }
+
+    /// Boş portlar tek satırda; sadece dolu portlar kart olur.
+    @ViewBuilder
+    private var portsSection: some View {
+        let ports = store.result.ports
+        if !ports.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionTitle(s.sectionPorts)
+
+                ForEach(ports.filter { !$0.isEmptyPort }) { item in
+                    ConnectionRow(item: item, isNew: store.newTitles.contains(item.title))
+                }
+
+                let empty = ports.filter(\.isEmptyPort)
+                if !empty.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(empty) { item in
+                            HStack(spacing: 8) {
+                                Image(systemName: "cable.connector")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.tertiary)
+                                    .frame(width: 16)
+                                Text(item.title)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(item.subtitle)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        Text(s.portEmptyNote)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 9))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func section(_ title: String, items: [Connection], emptyText: String? = nil) -> some View {
+        if !items.isEmpty || emptyText != nil {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionTitle(title)
+                if items.isEmpty, let emptyText {
+                    Text(emptyText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                } else {
+                    ForEach(items) { item in
+                        ConnectionRow(item: item, isNew: store.newTitles.contains(item.title))
+                    }
+                }
+            }
+        }
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .kerning(0.6)
+    }
+
+    private func noticeCard(_ text: String) -> some View {
+        Label(text, systemImage: "exclamationmark.triangle.fill")
+            .font(.system(size: 11))
+            .foregroundStyle(.orange)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: Başlık
@@ -61,66 +147,51 @@ struct PanelView: View {
                                : .default, value: store.isScanning)
             }
             .buttonStyle(.borderless)
-            .help("Yeniden tara")
+            .help(s.refresh)
         }
         .padding(14)
     }
 
     private var subtitleText: String {
-        if store.isScanning && store.result.all.isEmpty { return "Taranıyor…" }
-        let d = store.result.devices.count
-        let s = store.result.displays.count
+        if store.isScanning && store.result.all.isEmpty { return s.scanning }
+        let devices = store.result.devices.count
         var parts: [String] = []
-        parts.append(d == 0 ? "USB aygıtı yok" : "\(d) USB aygıtı")
-        if s > 0 { parts.append("\(s) ekran") }
+        parts.append(devices == 0 ? s.noUSBDevices : String(format: s.usbDeviceCount, devices))
+        let screens = store.result.displays.count
+        if screens > 0 { parts.append(String(format: s.displayCount, screens)) }
         return parts.joined(separator: " · ")
-    }
-
-    // MARK: Bölümler
-
-    @ViewBuilder
-    private func section(_ title: String, items: [Connection], emptyText: String? = nil) -> some View {
-        if !items.isEmpty || emptyText != nil {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title.uppercased())
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .kerning(0.6)
-
-                if items.isEmpty, let emptyText {
-                    Text(emptyText)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-                } else {
-                    ForEach(items) { item in
-                        ConnectionRow(item: item, isNew: store.newTitles.contains(item.title))
-                    }
-                }
-            }
-        }
-    }
-
-    private func noticeCard(_ text: String, level: VerdictLevel) -> some View {
-        Label(text, systemImage: level.symbol)
-            .font(.system(size: 11))
-            .foregroundStyle(.orange)
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     }
 
     // MARK: Alt bar
 
     private var footer: some View {
-        HStack {
-            Toggle("Girişte başlat", isOn: $store.launchAtLogin)
+        HStack(spacing: 10) {
+            Toggle(s.launchAtLogin, isOn: $store.launchAtLogin)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
+
             Spacer()
-            Button("Çıkış") { NSApp.terminate(nil) }
+
+            Menu {
+                Picker("", selection: $l10n.selection) {
+                    Text(String(format: s.systemLanguage, l10n.systemResolvedName))
+                        .tag(L10n.systemKey)
+                    Divider()
+                    ForEach(AppLanguage.allCases) { lang in
+                        Text("\(lang.flag)  \(lang.nativeName)").tag(lang.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.inline)
+            } label: {
+                Image(systemName: "globe")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 26)
+            .help(s.language)
+
+            Button(s.quit) { NSApp.terminate(nil) }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -133,6 +204,7 @@ struct PanelView: View {
 struct ConnectionRow: View {
     let item: Connection
     var isNew: Bool = false
+    @EnvironmentObject var l10n: L10n
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -148,7 +220,7 @@ struct ConnectionRow: View {
                             .font(.system(size: 12.5, weight: .semibold))
                             .lineLimit(1)
                         if isNew {
-                            Text("YENİ")
+                            Text(l10n.s.badgeNew)
                                 .font(.system(size: 8, weight: .bold))
                                 .padding(.horizontal, 4).padding(.vertical, 1)
                                 .background(Color.green.opacity(0.25), in: Capsule())
@@ -158,7 +230,7 @@ struct ConnectionRow: View {
                         Text(item.subtitle)
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(2)
                     }
                 }
                 Spacer(minLength: 4)
@@ -192,7 +264,6 @@ struct ConnectionRow: View {
             RoundedRectangle(cornerRadius: 9)
                 .strokeBorder(item.worstLevel == .warn ? Color.orange.opacity(0.35) : Color.clear, lineWidth: 1)
         )
-        .opacity(item.isEmptyPort ? 0.72 : 1)
     }
 
     private var background: Color {

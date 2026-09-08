@@ -1,0 +1,68 @@
+import Foundation
+
+extension KKStrings {
+    static let chinese = KKStrings(
+        tagline: "你刚插上的这根线，究竟能干什么？",
+        scanning: "正在扫描…",
+        noUSBDevices: "没有 USB 设备",
+        usbDeviceCount: "%d 个 USB 设备",
+        displayCount: "%d 台显示器",
+        refresh: "重新扫描",
+        badgeNew: "新",
+        launchAtLogin: "登录时启动",
+        quit: "退出",
+        language: "语言",
+        systemLanguage: "系统语言（%@）",
+        percentFormat: "%d%%",
+
+        sectionDevices: "已连接设备",
+        sectionPower: "电源",
+        sectionDisplays: "显示器",
+        sectionPorts: "端口",
+        emptyDevices: "当前没有 USB 设备。插上一根线，我来告诉你它能传什么。",
+
+        portTitle: "端口 %@",
+        portEmptySubtitle: "空闲 · 最高 %@",
+        portEmptyNote: "空闲端口上没有 Thunderbolt/USB4 设备。普通 USB 设备会显示在上面的列表中。",
+        portDeviceConnected: "已连接设备",
+        portFullSpeed: "已建立 40 Gb/s 连接 —— 你的线是全速 Thunderbolt/USB4 线缆。",
+        portSlow: "连接速率为 %@。这根线可能是被动线或低速线。",
+        tbDevice: "Thunderbolt 设备",
+        tbConnection: "Thunderbolt 连接：%@。",
+
+        charge: "充电",
+        adapterNotConnected: "未连接电源适配器",
+        adapterNotConnectedNote: "没有插充电器。插上之后，这里会显示适配器输出多少瓦，以及线缆有没有限制它。",
+        adapterFullPower: "%d W 适配器正在满功率供电（协商到 %@ W）。这根线可以毫无压力地承载。",
+        adapterBatteryFull: "当前功率 %@ W。电池已有 %d %%，所以 Mac 需要的电量不多，这是正常的。",
+        adapterLimited: "适配器是 %d W，但只有 %@ W 进来。线缆可能被限制在 60 W，或者没插到底。",
+        adapterProfile: "协商档位：%@ V · %@ A。",
+        adapterProfiles: "适配器提供的档位：%@。",
+        powerAdapterFallback: "电源适配器",
+
+        battery: "电池",
+        batteryMaxCapacity: "最大容量 %@",
+        batteryCycles: "%d 次循环",
+        chargingWithTime: "正在充电 —— 距离充满约 %d 分钟。",
+        charging: "正在充电。",
+        connectedNotCharging: "适配器已连接，但当前没有充电（电池已经够满）。",
+        batteryHealthGood: "电池健康状况良好。",
+        batteryHealthWorn: "电池容量已降至设计值的 %d %%，可能该更换了。",
+
+        usbDeviceFallback: "USB 设备",
+        deviceVersionSuffix: "%@ 设备",
+        viaParent: "经由 %@",
+        hubFast: "集线器以 %@ 连接；接在它下面的设备共享这个带宽。",
+        hubSlow: "集线器以 USB 2.0 速率（480 Mb/s）连接；插在它上面的任何设备都会被限制在这个速度。",
+        deviceFast: "以 %@ 连接 —— 设备、线缆和端口都在满速运行。",
+        deviceOwnLimit: "设备本身是 %@ —— 480 Mb/s 就是它自己的上限。不是线缆或端口的问题。",
+        deviceHubLimit: "设备支持 USB 3.x，但只连上了 480 Mb/s。瓶颈是它上面的 %@（工作在 USB 2.0）。",
+        deviceCableLimit: "设备支持 USB 3.x，但只协商到 480 Mb/s。你的线缆很可能是只能充电的 USB 2.0 线 —— 换成数据线会快 10 倍。",
+
+        externalDisplay: "外接显示器",
+        displayCarriesVideo: "这根线正在传输画面：%@。",
+        displaySleeping: "显示器当前处于睡眠状态。",
+
+        thunderboltUnavailable: "在此 macOS 版本上无法读取 Thunderbolt 端口数据（缺少预期的 system_profiler 数据类型）。USB 设备和电源信息不受影响。"
+    )
+}

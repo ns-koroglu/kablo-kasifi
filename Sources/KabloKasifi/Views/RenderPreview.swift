@@ -10,6 +10,7 @@ enum RenderPreview {
 
         let view = PanelView(scrollable: false)
             .environmentObject(store)
+            .environmentObject(L10n.shared)
             .frame(width: 380)
             .background(Color(nsColor: .windowBackgroundColor))
 
