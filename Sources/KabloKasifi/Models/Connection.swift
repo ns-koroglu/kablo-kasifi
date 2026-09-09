@@ -59,6 +59,8 @@ struct Connection: Identifiable, Sendable {
     var gbps: Double?
     var verdicts: [Verdict] = []
     var isEmptyPort: Bool = false
+    /// Hub ağacındaki derinlik (0 = doğrudan porta bağlı)
+    var indent: Int = 0
     /// Satıra özel SF Symbol (yoksa türün simgesi kullanılır)
     var icon: String?
 

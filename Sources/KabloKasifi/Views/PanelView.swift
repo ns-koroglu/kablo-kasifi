@@ -7,6 +7,7 @@ struct PanelView: View {
     @EnvironmentObject var l10n: L10n
     /// Ölçülen içerik yüksekliği; ScrollView yalnızca gerçekten taşınca devreye girer.
     @State private var contentHeight: CGFloat = 0
+    @State private var justCopied = false
 
     private let maxContentHeight: CGFloat = 520
     private var s: KKStrings { l10n.s }
@@ -62,7 +63,7 @@ struct PanelView: View {
             }
             section(s.sectionDevices, items: store.result.devices, emptyText: s.emptyDevices)
             section(s.sectionPower, items: store.result.power)
-            section(s.sectionDisplays, items: store.result.displays)
+            section(s.sectionDisplays, items: store.result.displays, emptyText: s.displaysEmpty)
             portsSection
         }
     }
@@ -126,6 +127,7 @@ struct PanelView: View {
                 } else {
                     ForEach(items) { item in
                         ConnectionRow(item: item, isNew: store.newIDs.contains(item.stableID))
+                            .padding(.leading, CGFloat(item.indent) * 14)
                     }
                 }
             }
@@ -172,6 +174,7 @@ struct PanelView: View {
             }
             .buttonStyle(.borderless)
             .help(s.refresh)
+            .accessibilityLabel(s.refresh)
         }
         .padding(14)
     }
@@ -192,10 +195,39 @@ struct PanelView: View {
     // MARK: Alt bar
 
     private var footer: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Button {
+                    store.copyReport()
+                    justCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { justCopied = false }
+                } label: {
+                    Label(justCopied ? s.copiedToClipboard : s.copyReport,
+                          systemImage: justCopied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityLabel(s.copyReport)
+
+                Spacer()
+
+                TimelineView(.periodic(from: .now, by: 5)) { _ in
+                    Text(lastScanText)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+
         HStack(spacing: 10) {
             Toggle(s.launchAtLogin, isOn: $store.launchAtLogin)
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
+
+            Toggle(s.notifyOnConnect, isOn: $store.notifyOnConnect)
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+                .help(s.notifyOnConnect)
 
             Spacer()
 
@@ -223,8 +255,17 @@ struct PanelView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
         }
+        }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+
+    private var lastScanText: String {
+        guard let last = store.lastScan else { return "" }
+        let seconds = Int(Date().timeIntervalSince(last))
+        if seconds < 10 { return s.lastScanJustNow }
+        if seconds < 60 { return String(format: s.lastScanAgo, "\(seconds) sn") }
+        return String(format: s.lastScanAgo, "\(seconds / 60) dk")
     }
 }
 
@@ -254,6 +295,8 @@ struct ConnectionRow: View {
                         Text(item.title)
                             .font(.system(size: 12.5, weight: .semibold))
                             .lineLimit(1)
+                            .truncationMode(.middle)
+                            .help(item.title)
                         if isNew {
                             Text(l10n.s.badgeNew)
                                 .font(.system(size: 8, weight: .bold))
@@ -299,6 +342,9 @@ struct ConnectionRow: View {
             RoundedRectangle(cornerRadius: 9)
                 .strokeBorder(item.worstLevel == .warn ? Color.orange.opacity(0.35) : Color.clear, lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel([item.title, item.badge, item.subtitle].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityValue(item.verdicts.map(\.text).joined(separator: " "))
     }
 
     private var background: Color {

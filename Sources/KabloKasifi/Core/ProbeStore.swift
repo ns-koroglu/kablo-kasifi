@@ -9,6 +9,7 @@ final class ProbeStore: ObservableObject {
     @Published private(set) var isScanning = false
     /// "YENİ" rozeti — dile bağlı olmayan kararlı kimlikler
     @Published private(set) var newIDs: Set<String> = []
+    @Published private(set) var lastScan: Date?
 
     /// Menü çubuğundaki watt: IOKit'ten anında okunur, tam taramayı beklemez.
     @Published private(set) var liveWatts: Int?
@@ -31,8 +32,21 @@ final class ProbeStore: ObservableObject {
     private var panelOpen = false
     private var needsScanWhenPanelOpens = true
 
+    /// Aygıt takılınca bildirim gönderilsin mi
+    @Published var notifyOnConnect: Bool {
+        didSet { Notifier.isEnabled = notifyOnConnect; if notifyOnConnect { Notifier.requestIfNeeded() } }
+    }
+
     private init() {
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        notifyOnConnect = Notifier.isEnabled
+    }
+
+    /// Panelin tamamını panoya kopyalar.
+    func copyReport() {
+        let text = SystemProbe.report(result)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     // MARK: - Canlı izleme (uygulama açık olduğu sürece)
@@ -55,7 +69,12 @@ final class ProbeStore: ObservableObject {
         // Ağır tarama yalnızca panel açıkken: kapalıyken görünen tek şey menü
         // çubuğundaki watt ve o zaten hızlı yoldan geliyor. (Aksi hâlde her
         // tak/çıkarda iki system_profiler alt süreci açılıyordu.)
-        guard panelOpen else { needsScanWhenPanelOpens = true; return }
+        // Panel kapalı olsa bile USB değişiminde tam tarama yap: bildirim
+        // gönderebilmek için aygıtın ne olduğunu bilmemiz gerekiyor.
+        guard panelOpen || (trigger == .usb && notifyOnConnect) else {
+            needsScanWhenPanelOpens = true
+            return
+        }
         // Tak/çıkarda IOKit art arda birkaç bildirim gönderiyor; kısa gecikme.
         scheduleFullScan(after: trigger == .power ? 0.4 : 0.25)
     }
@@ -102,7 +121,18 @@ final class ProbeStore: ObservableObject {
             newIDs.formUnion(ids.subtracting(knownIDs))
         }
         newIDs.formIntersection(ids)   // çıkarılan aygıtın rozeti kalmasın
+
+        // Yeni takılan aygıt için bildirim: panel kapalıyken de haber ver.
+        if !knownIDs.isEmpty {
+            let freshDevices = fresh.devices.filter { newIDs.contains($0.stableID) && !knownIDs.contains($0.stableID) }
+            for device in freshDevices.prefix(3) {
+                let verdict = device.verdicts.first?.text ?? device.subtitle
+                Notifier.deviceConnected(title: String(format: L10n.shared.s.notifConnected, device.title),
+                                         detail: verdict)
+            }
+        }
         knownIDs = ids
+        lastScan = Date()
         result = fresh
         isScanning = false
         if let charger = fresh.charger, charger.role == .charge {

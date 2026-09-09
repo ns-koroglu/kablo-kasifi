@@ -41,12 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if args.contains("--print") {
-            let r = SystemProbe.probe(L10n.shared.s)
-            var out = ""
-            for c in r.all {
-                out += "• [\(c.kind.rawValue)] \(c.title) \(c.badge.map { "(\($0))" } ?? "") — \(c.subtitle)\n"
-                for v in c.verdicts { out += "    - \(v.text)\n" }
-            }
+            let r = SystemProbe.probe(L10n.shared.s, displayNames: SystemProbe.currentDisplayNames())
+            var out = SystemProbe.report(r) + "\n"
             out += "\n" + SystemProbe.doctor() + "\n" 
             print(out)
             let path = NSTemporaryDirectory() + "kk-print.txt"

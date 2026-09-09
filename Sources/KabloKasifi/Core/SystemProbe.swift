@@ -41,6 +41,7 @@ enum SystemProbe {
                                badge: badge(for: gbps),
                                gbps: gbps)
             c.icon = device.isHub ? "point.3.connected.trianglepath.dotted" : nil
+            c.indent = max(0, device.depth - 1)
             c.verdicts = verdicts(for: device, in: devices, s)
             return c
         }
@@ -111,6 +112,18 @@ enum SystemProbe {
         guard let g = gbps, g > 0 else { return nil }
         if g < 1 { return "\(Int(g * 1000)) Mb/s" }
         return "\(Int(g)) Gb/s"
+    }
+
+    /// Panelin tamamını düz metne çevirir (panoya kopyalama ve --print için).
+    static func report(_ result: ProbeResult) -> String {
+        var out: [String] = []
+        for c in result.all {
+            let badge = c.badge.map { " (\($0))" } ?? ""
+            let indent = String(repeating: "  ", count: c.indent)
+            out.append("\(indent)• \(c.title)\(badge)\(c.subtitle.isEmpty ? "" : " — \(c.subtitle)")")
+            for v in c.verdicts { out.append("\(indent)    - \(v.text)") }
+        }
+        return out.joined(separator: "\n")
     }
 
     // MARK: - Güç (IOKit)

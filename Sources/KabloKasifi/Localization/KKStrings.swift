@@ -74,6 +74,16 @@ struct KKStrings: Sendable {
     let linkSpeedUnknown: String
     let usbVersionUnknown: String
 
+    // Panel eylemleri ve bildirimler
+    let copyReport: String
+    let copiedToClipboard: String
+    let lastScanJustNow: String
+    let lastScanAgo: String            // %@
+    let displaysEmpty: String
+    let notifyOnConnect: String
+    let notifConnected: String         // %@ = aygıt adı
+    let notifDisconnected: String
+
     // Ekranlar
     let externalDisplay: String
     let displayCarriesVideo: String   // %@ = çözünürlük

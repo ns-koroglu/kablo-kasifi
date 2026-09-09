@@ -36,6 +36,16 @@ Yoklama yok: güç değişimi (`IOPSNotificationCreateRunLoopSource`), USB tak/�
 okuması saf IOKit (~1 ms) ve tam taramadan ayrıdır. Yeni takılan aygıtlar **YENİ**
 rozetiyle işaretlenir (rozet dile bağlı olmayan kararlı kimliğe dayanır).
 
+**Aygıt takılınca bildirim** — Panel kapalıyken bile, yeni takılan aygıt için
+bildirim gelir ve içinde asıl yorum yazar ("Kablon büyük ihtimalle sadece şarj
+kablosu"). Alt satırdaki anahtarla kapatılabilir.
+
+**Hub ağacı girintili** — Bir hub'ın altındaki aygıtlar girintiyle gösterilir, hangi
+aygıtın neyin arkasında olduğu tek bakışta görünür.
+
+**Raporu kopyala** — Panelin tamamını düz metin olarak panoya alır; "bu kablo neden
+yavaş?" diye birine sorarken yapıştırman yeter.
+
 ## Diller
 
 🇹🇷 Türkçe (varsayılan) · 🇬🇧 English · 🇩🇪 Deutsch · 🇪🇸 Español · 🇫🇷 Français · 🇮🇹 Italiano · 🇵🇹 Português · 🇷🇺 Русский · 🇨🇳 简体中文 · 🇯🇵 日本語
@@ -50,6 +60,13 @@ eklendiğinde çeviri dosyaları derlenmez, tamamlanana kadar hata verir. Yeni b
 eklemek için `AppLanguage`'a bir durum ve karşılık gelen dosyayı eklemek yeterli.
 
 ## Kurulum
+
+**Hazır paket:** [Releases](https://github.com/ns-koroglu/kablo-kasifi/releases) sayfasından
+`.zip`'i indir, `Kablo Kaşifi.app`'i `/Applications`'a taşı. Notarize edilmediği için
+macOS ilk açılışta uyarı verir: **sağ tık → Aç** (ya da
+`xattr -dr com.apple.quarantine "/Applications/Kablo Kaşifi.app"`).
+
+**Kaynaktan:**
 
 ```bash
 ./build.sh --install --run
