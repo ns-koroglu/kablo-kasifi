@@ -7,7 +7,13 @@ final class ProbeStore: ObservableObject {
 
     @Published private(set) var result = ProbeResult()
     @Published private(set) var isScanning = false
-    @Published private(set) var newTitles: Set<String> = []
+    /// "YENİ" rozeti — dile bağlı olmayan kararlı kimlikler
+    @Published private(set) var newIDs: Set<String> = []
+
+    /// Menü çubuğundaki watt: IOKit'ten anında okunur, tam taramayı beklemez.
+    @Published private(set) var liveWatts: Int?
+    @Published private(set) var isCharging = false
+
     @Published var launchAtLogin: Bool {
         didSet {
             guard launchAtLogin != oldValue else { return }
@@ -18,12 +24,54 @@ final class ProbeStore: ObservableObject {
         }
     }
 
-    private var timer: Timer?
-    private var knownTitles: Set<String> = []
+    private var monitor: LiveMonitor?
+    private var backstopTimer: Timer?
+    private var pendingFullScan: DispatchWorkItem?
+    private var knownIDs: Set<String> = []
+    private var panelOpen = false
 
     private init() {
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
     }
+
+    // MARK: - Canlı izleme (uygulama açık olduğu sürece)
+
+    /// Uygulama açılışında bir kez çağrılır. Yoklama yok: IOKit bildirimleri.
+    func startLiveMonitoring() {
+        guard monitor == nil else { return }
+        let monitor = LiveMonitor { [weak self] trigger in
+            MainActor.assumeIsolated { self?.handle(trigger) }
+        }
+        self.monitor = monitor
+        monitor.start()
+        refreshPowerFast()
+        refresh()
+    }
+
+    private func handle(_ trigger: LiveMonitor.Trigger) {
+        // Watt/pil her olayda anında güncellensin (saf IOKit, alt süreç yok).
+        refreshPowerFast()
+        // Ağır tarama (Thunderbolt için system_profiler) kısa süre geciktirilir:
+        // tak/çıkarda IOKit art arda birkaç bildirim gönderiyor.
+        scheduleFullScan(after: trigger == .power ? 0.4 : 0.25)
+    }
+
+    private func scheduleFullScan(after delay: TimeInterval) {
+        pendingFullScan?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.refresh() }
+        pendingFullScan = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+
+    /// Yalnızca güç: IOKit okuması, ölçülen maliyet ~1 ms.
+    func refreshPowerFast() {
+        let adapter = PowerProbe.adapter()
+        let battery = PowerProbe.battery()
+        isCharging = battery.isCharging
+        liveWatts = adapter?.negotiatedWatts.map { Int($0.rounded()) } ?? adapter?.watts
+    }
+
+    // MARK: - Tam tarama
 
     func refresh() {
         guard !isScanning else { return }
@@ -35,41 +83,50 @@ final class ProbeStore: ObservableObject {
         }
     }
 
-    private func apply(_ fresh: ProbeResult) {
-        let titles = Set(fresh.devices.map(\.title) + fresh.displays.map(\.title)
-                         + fresh.ports.filter { !$0.isEmptyPort }.map(\.title))
-        newTitles = knownTitles.isEmpty ? [] : titles.subtracting(knownTitles)
-        knownTitles = titles
-        result = fresh
-        isScanning = false
-    }
-
-    /// Önizleme/CLI için eşzamanlı tarama.
     func refreshSynchronously() {
         apply(SystemProbe.probe(L10n.shared.s))
     }
 
-    /// Panel açıkken canlı takip.
-    func startWatching(interval: TimeInterval = 4) {
-        stopWatching()
+    private func apply(_ fresh: ProbeResult) {
+        let ids = Set(fresh.devices.map(\.stableID)
+                      + fresh.displays.map(\.stableID)
+                      + fresh.ports.filter { !$0.isEmptyPort }.map(\.stableID))
+        newIDs = knownIDs.isEmpty ? [] : ids.subtracting(knownIDs)
+        knownIDs = ids
+        result = fresh
+        isScanning = false
+        if let charger = fresh.charger, charger.role == .charge {
+            // Tam tarama da watt'ı tazelesin (bildirim kaçarsa diye).
+            refreshPowerFast()
+        }
+    }
+
+    // MARK: - Panel yaşam döngüsü
+
+    /// Panel açıkken yavaş bir emniyet zamanlayıcısı: bildirimle yakalanmayan
+    /// değişiklikler (ör. Thunderbolt bağlantı hızı) için. Eskiden 4 sn'de bir
+    /// tam tarama yapılıyordu; bu iki `system_profiler` alt süreci demekti.
+    func panelAppeared() {
+        panelOpen = true
+        refreshPowerFast()
         refresh()
-        let t = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
+        backstopTimer?.invalidate()
+        let t = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
         RunLoop.main.add(t, forMode: .common)
-        timer = t
+        backstopTimer = t
     }
 
-    func stopWatching() {
-        timer?.invalidate()
-        timer = nil
+    func panelDisappeared() {
+        panelOpen = false
+        backstopTimer?.invalidate()
+        backstopTimer = nil
     }
 
-    /// Menü çubuğunda gösterilecek kısa özet (şarj watt'ı ya da bağlı aygıt sayısı).
+    /// Menü çubuğunda gösterilecek kısa özet.
     var menuBarText: String? {
-        if let adapter = result.power.first(where: { $0.title == "Şarj" }), adapter.badge != nil {
-            return adapter.badge
-        }
+        if let watts = liveWatts, watts > 0 { return "\(watts) W" }
         let count = result.devices.count
         return count > 0 ? "\(count)" : nil
     }

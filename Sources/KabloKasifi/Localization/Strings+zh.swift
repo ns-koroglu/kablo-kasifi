@@ -6,7 +6,9 @@ extension KKStrings {
         scanning: "正在扫描…",
         noUSBDevices: "没有 USB 设备",
         usbDeviceCount: "%d 个 USB 设备",
+        usbDeviceCountOne: "1 个 USB 设备",
         displayCount: "%d 台显示器",
+        displayCountOne: "1 台显示器",
         refresh: "重新扫描",
         badgeNew: "新",
         launchAtLogin: "登录时启动",
@@ -58,6 +60,7 @@ extension KKStrings {
         deviceOwnLimit: "设备本身是 %@ —— 480 Mb/s 就是它自己的上限。不是线缆或端口的问题。",
         deviceHubLimit: "设备支持 USB 3.x，但只连上了 480 Mb/s。瓶颈是它上面的 %@（工作在 USB 2.0）。",
         deviceCableLimit: "设备支持 USB 3.x，但只协商到 480 Mb/s。你的线缆很可能是只能充电的 USB 2.0 线 —— 换成数据线会快 10 倍。",
+        linkSpeedUnknown: "读不到连接速率，所以我不会怪线缆、集线器或设备。",
 
         externalDisplay: "外接显示器",
         displayCarriesVideo: "这根线正在传输画面：%@。",

@@ -30,8 +30,11 @@ kablosu — veri kablosuyla 10 kat hızlanır."*
 **Ekranlar** — Harici ekran varsa kablonun video taşıdığını ve hangi çözünürlük/tazeleme
 hızında çalıştığını gösterir.
 
-Panel açıkken 4 saniyede bir kendini yeniler; yeni takılan aygıtlar **YENİ** rozetiyle
-işaretlenir. Menü çubuğunda şarj varken watt değeri görünür.
+Yoklama yok: güç değişimi (`IOPSNotificationCreateRunLoopSource`), USB tak/çıkar
+(`IOServiceAddMatchingNotification`) ve ekran değişimi olayları geldiği anda işlenir.
+**Menü çubuğundaki watt değeri anlıktır** — panel kapalıyken de canlı kalır, çünkü güç
+okuması saf IOKit (~1 ms) ve tam taramadan ayrıdır. Yeni takılan aygıtlar **YENİ**
+rozetiyle işaretlenir (rozet dile bağlı olmayan kararlı kimliğe dayanır).
 
 ## Diller
 
@@ -127,6 +130,7 @@ Sources/KabloKasifi/
   App/AppDelegate.swift            --print ve --render bayrakları
   Core/SystemProbe.swift           Veri toplama + Türkçe yorum motoru
   Core/USBProbe.swift              IOKit USB aygıt ağacı (hız, bcdUSB, hub ilişkisi)
+  Core/LiveMonitor.swift           Güç/USB/ekran değişimlerini anında yakalayan bildirimler
   Core/PowerProbe.swift            IOKit adaptör/pil bilgisi (PD profilleri dahil)
   Core/ProbeStore.swift            Durum, canlı yenileme, yeni aygıt algılama
   Models/Connection.swift          Satır ve yorum modelleri

@@ -11,7 +11,9 @@ struct KKStrings: Sendable {
     let scanning: String
     let noUSBDevices: String
     let usbDeviceCount: String        // %d
+    let usbDeviceCountOne: String     // tekil
     let displayCount: String          // %d
+    let displayCountOne: String       // tekil
     let refresh: String
     let badgeNew: String
     let launchAtLogin: String
@@ -69,6 +71,7 @@ struct KKStrings: Sendable {
     let deviceOwnLimit: String        // %@ = usb sürümü
     let deviceHubLimit: String        // %@ = hub adı
     let deviceCableLimit: String
+    let linkSpeedUnknown: String
 
     // Ekranlar
     let externalDisplay: String

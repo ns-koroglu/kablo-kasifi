@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -8,6 +9,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--render"), i + 1 < args.count {
             MainActor.assumeIsolated { RenderPreview.run(path: args[i + 1]) }
+            NSApp.terminate(nil)
+            return
+        }
+        // Gerçek AppKit yerleşimiyle panel boyutunu ölç (MenuBarExtra ile aynı yol)
+        if args.contains("--measure") {
+            MainActor.assumeIsolated {
+                ProbeStore.shared.refreshSynchronously()
+                let view = PanelView()
+                    .environmentObject(ProbeStore.shared)
+                    .environmentObject(L10n.shared)
+                let host = NSHostingView(rootView: view)
+                host.layoutSubtreeIfNeeded()
+                let fitting = host.fittingSize
+                let text = "fittingSize: \(Int(fitting.width)) x \(Int(fitting.height))"
+                print(text)
+                try? text.write(toFile: "/tmp/kk-measure.txt", atomically: true, encoding: .utf8)
+            }
             NSApp.terminate(nil)
             return
         }
@@ -32,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        MainActor.assumeIsolated { ProbeStore.shared.refresh() }
+        MainActor.assumeIsolated { ProbeStore.shared.startLiveMonitoring() }
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }

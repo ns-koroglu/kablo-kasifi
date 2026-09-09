@@ -5,7 +5,10 @@ struct PanelView: View {
     var scrollable: Bool = true
     @EnvironmentObject var store: ProbeStore
     @EnvironmentObject var l10n: L10n
+    /// Ölçülen içerik yüksekliği; ScrollView yalnızca gerçekten taşınca devreye girer.
+    @State private var contentHeight: CGFloat = 0
 
+    private let maxContentHeight: CGFloat = 520
     private var s: KKStrings { l10n.s }
 
     var body: some View {
@@ -13,23 +16,44 @@ struct PanelView: View {
             header
             Divider()
 
-            if scrollable {
-                ScrollView { sections.padding(14) }
-                    .frame(maxHeight: 520)
+            // MenuBarExtra penceresinde ScrollView'ün ideal yüksekliği sıfır sayılıyor
+            // ve içerik tamamen kayboluyor. Bu yüzden içerik sığdığı sürece doğal
+            // yüksekliğiyle çiziliyor; yalnızca taştığında sabit yükseklikli
+            // ScrollView'e geçiliyor.
+            if scrollable && contentHeight > maxContentHeight {
+                ScrollView { measuredSections }
+                    .frame(height: maxContentHeight)
             } else {
-                sections.padding(14)
+                measuredSections
             }
 
             Divider()
             footer
         }
         .frame(width: 380)
-        .onAppear { store.startWatching() }
-        .onDisappear { store.stopWatching() }
+        .onAppear { store.panelAppeared() }
+        .onDisappear { store.panelDisappeared() }
         .onChange(of: l10n.selection) { _, _ in store.refresh() }
     }
 
     // MARK: Bölümler — ilgi sırasına göre: aygıtlar, güç, ekranlar, portlar
+
+    /// İçeriği çizerken yüksekliğini de ölçer.
+    private var measuredSections: some View {
+        sections
+            .padding(14)
+            // Esnek yükseklik önerisi geldiğinde (MenuBarExtra penceresi) içerik
+            // sıfıra çökmesin; doğal yüksekliğinde kalsın.
+            .fixedSize(horizontal: false, vertical: true)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: ContentHeightKey.self, value: geo.size.height)
+                }
+            )
+            .onPreferenceChange(ContentHeightKey.self) { height in
+                if abs(height - contentHeight) > 1 { contentHeight = height }
+            }
+    }
 
     private var sections: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -52,7 +76,7 @@ struct PanelView: View {
                 sectionTitle(s.sectionPorts)
 
                 ForEach(ports.filter { !$0.isEmptyPort }) { item in
-                    ConnectionRow(item: item, isNew: store.newTitles.contains(item.title))
+                    ConnectionRow(item: item, isNew: store.newIDs.contains(item.stableID))
                 }
 
                 let empty = ports.filter(\.isEmptyPort)
@@ -101,7 +125,7 @@ struct PanelView: View {
                         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                 } else {
                     ForEach(items) { item in
-                        ConnectionRow(item: item, isNew: store.newTitles.contains(item.title))
+                        ConnectionRow(item: item, isNew: store.newIDs.contains(item.stableID))
                     }
                 }
             }
@@ -156,9 +180,12 @@ struct PanelView: View {
         if store.isScanning && store.result.all.isEmpty { return s.scanning }
         let devices = store.result.devices.count
         var parts: [String] = []
-        parts.append(devices == 0 ? s.noUSBDevices : String(format: s.usbDeviceCount, devices))
+        parts.append(devices == 0 ? s.noUSBDevices
+                     : devices == 1 ? s.usbDeviceCountOne
+                     : String(format: s.usbDeviceCount, devices))
         let screens = store.result.displays.count
-        if screens > 0 { parts.append(String(format: s.displayCount, screens)) }
+        if screens == 1 { parts.append(s.displayCountOne) }
+        else if screens > 1 { parts.append(String(format: s.displayCount, screens)) }
         return parts.joined(separator: " · ")
     }
 
@@ -198,6 +225,14 @@ struct PanelView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+    }
+}
+
+/// İçerik yüksekliğini yukarı taşıyan tercih anahtarı.
+private struct ContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 

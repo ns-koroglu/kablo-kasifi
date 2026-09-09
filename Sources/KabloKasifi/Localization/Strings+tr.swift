@@ -6,7 +6,9 @@ extension KKStrings {
         scanning: "Taranıyor…",
         noUSBDevices: "USB aygıtı yok",
         usbDeviceCount: "%d USB aygıtı",
+        usbDeviceCountOne: "1 USB aygıtı",
         displayCount: "%d ekran",
+        displayCountOne: "1 ekran",
         refresh: "Yeniden tara",
         badgeNew: "YENİ",
         launchAtLogin: "Girişte başlat",
@@ -58,6 +60,7 @@ extension KKStrings {
         deviceOwnLimit: "Aygıtın kendisi %@ — 480 Mb/s onun tavanı. Kablo veya port suçlu değil.",
         deviceHubLimit: "Aygıt USB 3.x destekliyor ama 480 Mb/s'de bağlı. Sınırlayan, üstündeki %@ (USB 2.0 hızında).",
         deviceCableLimit: "Aygıt USB 3.x destekliyor ama yalnızca 480 Mb/s'de bağlanmış. Kablo büyük ihtimalle sadece şarj/USB 2.0 kablosu — veri kablosuyla 10 kat hızlanır.",
+        linkSpeedUnknown: "Bağlantı hızı okunamadı; bu yüzden kablo, hub ya da aygıt hakkında bir hüküm vermiyorum.",
 
         externalDisplay: "Harici ekran",
         displayCarriesVideo: "Bu kablo görüntü taşıyor: %@.",

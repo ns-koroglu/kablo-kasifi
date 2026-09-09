@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import IOKit.ps
 
 /// Güç adaptörü ve pil bilgisi — doğrudan IOKit'ten.
 ///
@@ -20,8 +21,8 @@ struct AdapterInfo: Sendable {
     var profiles: [(volts: Double, amps: Double)] = []
 
     var negotiatedWatts: Double? {
-        if let voltage, let current { return voltage * current }
-        if let watts { return Double(watts) }
+        if let voltage, let current, voltage > 0, current > 0 { return voltage * current }
+        if let watts, watts > 0 { return Double(watts) }
         return nil
     }
 }
@@ -50,9 +51,12 @@ enum PowerProbe {
     }
 
     static func adapter() -> AdapterInfo? {
-        guard let props = batteryProperties() else { return nil }
+        // Pili olmayan Mac'lerde (Mac mini/Studio) AppleSmartBattery yok;
+        // o durumda güç kaynağı API'sine düş.
+        guard let props = batteryProperties() else { return adapterFromPowerSources() }
         guard (props["ExternalConnected"] as? Bool) == true,
-              let details = props["AdapterDetails"] as? [String: Any], !details.isEmpty else { return nil }
+              let details = props["AdapterDetails"] as? [String: Any], !details.isEmpty
+        else { return adapterFromPowerSources() }
 
         var info = AdapterInfo()
         info.name = details["Name"] as? String
@@ -64,7 +68,10 @@ enum PowerProbe {
         if let ma = (details["Current"] as? NSNumber) {
             info.current = ma.doubleValue / 1000
         }
-        info.labelWatts = info.name.flatMap(wattsFromName) ?? info.watts
+        // Adaptör adından etiket gücü çıkarılamıyorsa nil kalsın: aksi hâlde
+        // etiket == anlaşılan güç olur, oran daima 1.0 çıkar ve "kablo sınırlıyor"
+        // uyarısı hiçbir zaman tetiklenmez.
+        info.labelWatts = info.name.flatMap(wattsFromName)
 
         if let menu = details["UsbHvcMenu"] as? [[String: Any]] {
             info.profiles = menu.compactMap { entry in
@@ -83,6 +90,21 @@ enum PowerProbe {
               let m = regex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
               let range = Range(m.range(at: 1), in: name) else { return nil }
         return Int(name[range])
+    }
+
+    /// Pilsiz makineler için yedek yol.
+    private static func adapterFromPowerSources() -> AdapterInfo? {
+        guard let details = IOPSCopyExternalPowerAdapterDetails()?.takeRetainedValue() as? [String: Any],
+              !details.isEmpty else { return nil }
+        var info = AdapterInfo()
+        info.name = (details["Name"] as? String) ?? (details["Description"] as? String)
+        info.watts = (details["Watts"] as? NSNumber)?.intValue
+        if let mv = (details["AdapterVoltage"] as? NSNumber ?? details["Voltage"] as? NSNumber) {
+            info.voltage = mv.doubleValue / 1000
+        }
+        if let ma = (details["Current"] as? NSNumber) { info.current = ma.doubleValue / 1000 }
+        info.labelWatts = info.name.flatMap(wattsFromName)
+        return info
     }
 
     static func battery() -> BatteryInfo {

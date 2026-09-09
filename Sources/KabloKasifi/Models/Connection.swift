@@ -22,6 +22,12 @@ struct Verdict: Identifiable, Sendable {
     var text: String
 }
 
+/// Satırın işlevi — arayüz metninden bağımsız, dile duyarsız.
+/// (Menü çubuğu rozetini başlık metniyle eşleştirmek 10 dilin 9'unda kırılıyordu.)
+enum ConnectionRole: String, Sendable {
+    case port, charge, battery, usbDevice, display
+}
+
 enum LinkKind: String, Sendable {
     case port, power, usb, display, network, audio
 
@@ -41,6 +47,10 @@ enum LinkKind: String, Sendable {
 struct Connection: Identifiable, Sendable {
     var id = UUID()
     var kind: LinkKind
+    /// İşlevsel rol (dile bağlı değil)
+    var role: ConnectionRole = .usbDevice
+    /// Dile ve çeviriye bağlı olmayan kalıcı kimlik ("YENİ" rozeti bunu kullanır)
+    var stableID: String = ""
     var title: String
     var subtitle: String = ""
     /// "40 Gb/s", "35 W" gibi kısa rozet
@@ -66,5 +76,8 @@ struct ProbeResult: Sendable {
     var failure: String?
 
     var all: [Connection] { ports + power + devices + displays }
+
+    /// Menü çubuğu için şarj satırı — metin eşleşmesi yok.
+    var charger: Connection? { power.first { $0.role == .charge } }
     var connectedCount: Int { devices.count + displays.count + ports.filter { !$0.isEmptyPort }.count }
 }

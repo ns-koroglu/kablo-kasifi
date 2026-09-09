@@ -6,7 +6,9 @@ extension KKStrings {
         scanning: "Analyse en cours…",
         noUSBDevices: "Aucun périphérique USB",
         usbDeviceCount: "%d périphériques USB",
+        usbDeviceCountOne: "1 périphérique USB",
         displayCount: "%d écrans",
+        displayCountOne: "1 écran",
         refresh: "Analyser à nouveau",
         badgeNew: "NOUVEAU",
         launchAtLogin: "Ouvrir à la session",
@@ -58,6 +60,7 @@ extension KKStrings {
         deviceOwnLimit: "Le périphérique lui-même est %@ : 480 Mb/s est son propre plafond. Ni le câble ni le port ne sont en cause.",
         deviceHubLimit: "Le périphérique gère l'USB 3.x mais négocie 480 Mb/s. C'est le %@ en amont qui limite (il fonctionne en USB 2.0).",
         deviceCableLimit: "Le périphérique gère l'USB 3.x mais ne négocie que 480 Mb/s. Ton câble est très probablement un câble de charge/USB 2.0 — un câble de données le rendrait 10× plus rapide.",
+        linkSpeedUnknown: "La vitesse de liaison n'a pas pu être lue : je n'accuse donc ni le câble, ni le hub, ni le périphérique.",
 
         externalDisplay: "Écran externe",
         displayCarriesVideo: "Ce câble transporte la vidéo : %@.",

@@ -6,7 +6,9 @@ extension KKStrings {
         scanning: "Scanning…",
         noUSBDevices: "No USB devices",
         usbDeviceCount: "%d USB devices",
+        usbDeviceCountOne: "1 USB device",
         displayCount: "%d displays",
+        displayCountOne: "1 display",
         refresh: "Scan again",
         badgeNew: "NEW",
         launchAtLogin: "Launch at login",
@@ -58,6 +60,7 @@ extension KKStrings {
         deviceOwnLimit: "The device itself is %@ — 480 Mb/s is its own ceiling. The cable and port are not at fault.",
         deviceHubLimit: "The device supports USB 3.x but is linked at 480 Mb/s. The limit comes from the %@ above it (running at USB 2.0).",
         deviceCableLimit: "The device supports USB 3.x but only linked at 480 Mb/s. Your cable is most likely a charge-only/USB 2.0 cable — a data cable would make it 10× faster.",
+        linkSpeedUnknown: "The link speed could not be read, so I won't blame the cable, hub or device.",
 
         externalDisplay: "External display",
         displayCarriesVideo: "This cable carries video: %@.",

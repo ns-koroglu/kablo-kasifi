@@ -6,7 +6,9 @@ extension KKStrings {
         scanning: "スキャン中…",
         noUSBDevices: "USB デバイスなし",
         usbDeviceCount: "USB デバイス %d 台",
+        usbDeviceCountOne: "USB デバイス 1 台",
         displayCount: "ディスプレイ %d 台",
+        displayCountOne: "ディスプレイ 1 台",
         refresh: "再スキャン",
         badgeNew: "新規",
         launchAtLogin: "ログイン時に起動",
@@ -58,6 +60,7 @@ extension KKStrings {
         deviceOwnLimit: "デバイス自体が %@ です。480 Mb/s はこの機器の上限で、ケーブルやポートのせいではありません。",
         deviceHubLimit: "デバイスは USB 3.x 対応ですが 480 Mb/s でリンクしています。制限しているのは手前の %@（USB 2.0 動作）です。",
         deviceCableLimit: "デバイスは USB 3.x 対応ですが 480 Mb/s でしかリンクしていません。ケーブルが充電専用（USB 2.0）の可能性が高く、データ用ケーブルなら 10 倍速くなります。",
+        linkSpeedUnknown: "リンク速度が読み取れませんでした。ケーブルもハブもデバイスも決めつけません。",
 
         externalDisplay: "外部ディスプレイ",
         displayCarriesVideo: "このケーブルは映像を通しています: %@。",

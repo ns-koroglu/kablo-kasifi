@@ -6,7 +6,9 @@ extension KKStrings {
         scanning: "Wird gescannt…",
         noUSBDevices: "Keine USB-Geräte",
         usbDeviceCount: "%d USB-Geräte",
+        usbDeviceCountOne: "1 USB-Gerät",
         displayCount: "%d Displays",
+        displayCountOne: "1 Display",
         refresh: "Erneut scannen",
         badgeNew: "NEU",
         launchAtLogin: "Beim Anmelden starten",
@@ -58,6 +60,7 @@ extension KKStrings {
         deviceOwnLimit: "Das Gerät selbst ist %@ — 480 Mb/s sind seine eigene Obergrenze. Kabel und Anschluss sind nicht schuld.",
         deviceHubLimit: "Das Gerät kann USB 3.x, ist aber mit 480 Mb/s verbunden. Die Bremse ist der %@ davor (läuft mit USB 2.0).",
         deviceCableLimit: "Das Gerät kann USB 3.x, ist aber nur mit 480 Mb/s verbunden. Dein Kabel ist höchstwahrscheinlich ein reines Lade-/USB-2.0-Kabel — mit einem Datenkabel wird es 10× schneller.",
+        linkSpeedUnknown: "Die Verbindungsgeschwindigkeit ließ sich nicht lesen — deshalb beschuldige ich weder Kabel noch Hub oder Gerät.",
 
         externalDisplay: "Externes Display",
         displayCarriesVideo: "Dieses Kabel überträgt Bild: %@.",

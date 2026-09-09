@@ -6,7 +6,9 @@ extension KKStrings {
         scanning: "Scansione…",
         noUSBDevices: "Nessun dispositivo USB",
         usbDeviceCount: "%d dispositivi USB",
+        usbDeviceCountOne: "1 dispositivo USB",
         displayCount: "%d display",
+        displayCountOne: "1 display",
         refresh: "Scansiona di nuovo",
         badgeNew: "NUOVO",
         launchAtLogin: "Avvia al login",
@@ -58,6 +60,7 @@ extension KKStrings {
         deviceOwnLimit: "Il dispositivo stesso è %@: 480 Mb/s è il suo tetto. Cavo e porta non c'entrano.",
         deviceHubLimit: "Il dispositivo supporta USB 3.x ma è collegato a 480 Mb/s. A limitarlo è l'%@ a monte (che lavora in USB 2.0).",
         deviceCableLimit: "Il dispositivo supporta USB 3.x ma si è collegato solo a 480 Mb/s. Il tuo cavo è quasi certamente di sola ricarica/USB 2.0: con uno dati andrebbe 10 volte più veloce.",
+        linkSpeedUnknown: "Non è stato possibile leggere la velocità del collegamento, quindi non incolpo né il cavo né l'hub né il dispositivo.",
 
         externalDisplay: "Display esterno",
         displayCarriesVideo: "Questo cavo trasporta il video: %@.",

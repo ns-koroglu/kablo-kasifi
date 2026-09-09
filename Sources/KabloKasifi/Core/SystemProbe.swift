@@ -16,7 +16,7 @@ enum SystemProbe {
 
     static func probe(_ s: KKStrings) -> ProbeResult {
         var result = ProbeResult()
-        let usb = USBProbe.devices()
+        let usb = USBProbe.devices(fallbackName: s.usbDeviceFallback)
         result.devices = usbRows(usb, s)
         result.power = powerRows(s)
         result.displays = displayRows(s)
@@ -32,6 +32,8 @@ enum SystemProbe {
         devices.map { device in
             let gbps = device.linkGbps
             var c = Connection(kind: .usb,
+                               role: .usbDevice,
+                               stableID: "usb:\(device.locationID)",
                                title: device.name,
                                subtitle: subtitle(for: device, in: devices, s),
                                badge: badge(for: gbps),
@@ -54,7 +56,10 @@ enum SystemProbe {
 
     private static func verdicts(for device: USBDeviceInfo, in all: [USBDeviceInfo], _ s: KKStrings) -> [Verdict] {
         var out: [Verdict] = []
-        let link = device.linkGbps ?? 0
+        guard let link = device.linkGbps else {
+            // Hız okunamadıysa kimseyi suçlama.
+            return [Verdict(level: .info, text: s.linkSpeedUnknown)]
+        }
         let capability = device.capabilityGbps ?? 0
         let parent = USBProbe.parent(of: device, in: all)
 
@@ -111,7 +116,8 @@ enum SystemProbe {
         var out: [Connection] = []
         let battery = PowerProbe.battery()
 
-        var charge = Connection(kind: .power, title: s.charge, icon: "bolt.fill")
+        var charge = Connection(kind: .power, role: .charge, stableID: "power:charger",
+                                title: s.charge, icon: "bolt.fill")
         if let adapter = PowerProbe.adapter() {
             charge.subtitle = adapter.name ?? adapter.description ?? s.powerAdapterFallback
             let negotiated = adapter.negotiatedWatts
@@ -150,7 +156,8 @@ enum SystemProbe {
         out.append(charge)
 
         if let percent = battery.percent {
-            var b = Connection(kind: .power, title: s.battery, badge: percentText(percent, s),
+            var b = Connection(kind: .power, role: .battery, stableID: "power:battery",
+                               title: s.battery, badge: percentText(percent, s),
                                icon: batteryIcon(percent: percent, charging: battery.isCharging))
             var parts: [String] = []
             // Sistem Ayarları'ndaki değeri kullan ama yazımı seçili dile göre biçimle
@@ -170,9 +177,11 @@ enum SystemProbe {
             } else if battery.externalConnected {
                 b.verdicts.append(Verdict(level: .info, text: s.connectedNotCharging))
             }
-            if let raw = battery.rawHealthPercent {
-                b.verdicts.append(Verdict(level: raw >= 80 ? .good : .warn,
-                    text: raw >= 80 ? s.batteryHealthGood : String(format: s.batteryHealthWorn, raw)))
+            // Altyazı ile yorum aynı sayıyı kullansın (biri Sistem Ayarları değeri,
+            // diğeri ham oran olduğunda çelişkili görünüyordu).
+            if let health = healthValue {
+                b.verdicts.append(Verdict(level: health >= 80 ? .good : .warn,
+                    text: health >= 80 ? s.batteryHealthGood : String(format: s.batteryHealthWorn, health)))
             }
             out.append(b)
         }
@@ -221,7 +230,8 @@ enum SystemProbe {
             var resolution = "\(width) × \(height)"
             if refresh > 0 { resolution += String(format: " @ %.0f Hz", refresh) }
 
-            var c = Connection(kind: .display, title: name, subtitle: resolution, badge: "video")
+            var c = Connection(kind: .display, role: .display, stableID: "display:\(id)",
+                               title: name, subtitle: resolution, badge: "video")
             c.verdicts.append(Verdict(level: .good,
                 text: String(format: s.displayCarriesVideo, resolution)))
             if CGDisplayIsAsleep(id) != 0 {
@@ -263,6 +273,8 @@ enum SystemProbe {
                 let isEmpty = status.contains("no_devices_connected")
 
                 var c = Connection(kind: .port,
+                                   role: .port,
+                                   stableID: "port:\(idText)",
                                    title: String(format: s.portTitle, idText),
                                    subtitle: isEmpty
                                         ? String(format: s.portEmptySubtitle, badge(for: speed) ?? "40 Gb/s")
@@ -285,7 +297,9 @@ enum SystemProbe {
                 let name = (device["device_name_key"] as? String) ?? s.tbDevice
                 let vendor = (device["vendor_name_key"] as? String) ?? ""
                 let speed = speedFromText(device["current_speed_key"] as? String)
-                var c = Connection(kind: .port, title: name,
+                var c = Connection(kind: .port, role: .port,
+                                   stableID: "tb:\(name)",
+                                   title: name,
                                    subtitle: vendor.isEmpty ? s.tbDevice : vendor,
                                    badge: badge(for: speed), gbps: speed)
                 c.verdicts.append(Verdict(level: (speed ?? 0) >= 40 ? .good : .info,
@@ -296,16 +310,20 @@ enum SystemProbe {
         return (out.sorted { $0.title < $1.title }, nil)
     }
 
-    /// "Up to 40 Gb/s" → 40
+    /// "Up to 40 Gb/s" → 40, "Up to 480 Mb/s" → 0.48
+    ///
+    /// Not: eskiden alt dize aramasıyla yapılıyordu ve "480 Mb/s" içindeki "80"
+    /// yüzünden 80 Gb/s okunuyordu. Artık sayı ve birim birlikte ayrıştırılıyor.
     static func speedFromText(_ raw: String?) -> Double? {
-        guard let s = raw?.lowercased() else { return nil }
-        if s.contains("80") { return 80 }
-        if s.contains("40") { return 40 }
-        if s.contains("20") { return 20 }
-        if s.contains("10") { return 10 }
-        if s.contains("5") { return 5 }
-        if s.contains("480") { return 0.48 }
-        return nil
+        guard let raw else { return nil }
+        let pattern = #"(\d+(?:[.,]\d+)?)\s*(gb|mb)/s"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let m = regex.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
+              let numberRange = Range(m.range(at: 1), in: raw),
+              let unitRange = Range(m.range(at: 2), in: raw),
+              let value = Double(raw[numberRange].replacingOccurrences(of: ",", with: "."))
+        else { return nil }
+        return raw[unitRange].lowercased() == "mb" ? value / 1000 : value
     }
 
     // MARK: - system_profiler yardımcıları
@@ -349,7 +367,7 @@ enum SystemProbe {
 
     /// Hangi veri kaynağı çalışıyor? (--doctor)
     static func doctor() -> String {
-        let usb = USBProbe.devices()
+        let usb = USBProbe.devices(fallbackName: "USB")
         let adapter = PowerProbe.adapter()
         let strings = KKStrings.turkish
         let tb = profilerItems(["SPThunderboltDataType", "SPThunderboltHostDataType"])

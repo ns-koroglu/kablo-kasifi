@@ -40,7 +40,7 @@ struct USBDeviceInfo: Sendable {
 
 enum USBProbe {
 
-    static func devices() -> [USBDeviceInfo] {
+    static func devices(fallbackName: String = "USB") -> [USBDeviceInfo] {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault,
                                            IOServiceMatching("IOUSBHostDevice"),
@@ -54,11 +54,14 @@ enum USBProbe {
 
             let name = (props["USB Product Name"] as? String)
                 ?? (props["kUSBProductString"] as? String)
-                ?? "USB aygıtı"
+                ?? fallbackName
             let vendor = (props["USB Vendor Name"] as? String)
                 ?? (props["kUSBVendorString"] as? String) ?? ""
             let location = (props["locationID"] as? NSNumber)?.uint32Value ?? 0
+            // Üç kademeli: UsbLinkSpeed (bit/s) → USBSpeed → Device Speed.
+            // Anahtar adları macOS sürümleri arasında değişebiliyor.
             let speed = (props["UsbLinkSpeed"] as? NSNumber)?.doubleValue
+                ?? fallbackSpeed(props["USBSpeed"] as? NSNumber)
                 ?? fallbackSpeed(props["Device Speed"] as? NSNumber)
             let bcd = (props["bcdUSB"] as? NSNumber)?.intValue
             let isHub = ((props["bDeviceClass"] as? NSNumber)?.intValue ?? 0) == 9
