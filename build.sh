@@ -21,20 +21,23 @@ for arg in "$@"; do
     --install) INSTALL=1 ;;
     --run) RUN=1 ;;
     --reset-perm)
-      tccutil reset Accessibility "$BUNDLE_ID" || true
-      echo "İzin sıfırlandı. Uygulamayı yeniden başlatıp izni tekrar ver."
+      echo "Kablo Kaşifi hiçbir özel izin kullanmıyor; sıfırlanacak bir şey yok."
       exit 0 ;;
     *) echo "Bilinmeyen seçenek: $arg"; exit 1 ;;
   esac
 done
 
+# Hata günlüğü dünya-yazılır /tmp yerine güvenli geçici dosyaya
+ERR_LOG="$(mktemp -t build_err)"
+trap 'rm -f "$ERR_LOG"' EXIT
+
 echo "▸ Derleniyor…"
-if ! swift build -c release 2>/tmp/tv_build_err.txt; then
-  if grep -q "Xcode license" /tmp/tv_build_err.txt; then
+if ! swift build -c release 2>"$ERR_LOG"; then
+  if grep -q "Xcode license" "$ERR_LOG"; then
     echo "  (Xcode lisansı onaylanmamış — Command Line Tools araç zinciriyle deneniyor)"
     DEVELOPER_DIR=/Library/Developer/CommandLineTools swift build -c release
   else
-    cat /tmp/tv_build_err.txt; exit 1
+    cat "$ERR_LOG"; exit 1
   fi
 fi
 BIN=".build/release/$EXEC_NAME"
@@ -61,8 +64,11 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 SIGN_IDENTITY="${SIGN_IDENTITY:-Yerel Kod Imzasi}"
 if security find-certificate -c "$SIGN_IDENTITY" >/dev/null 2>&1; then
-  echo "▸ İmzalanıyor ($SIGN_IDENTITY)…"
-  codesign --force --deep --sign "$SIGN_IDENTITY" --identifier "$BUNDLE_ID" "$APP"
+  echo "▸ İmzalanıyor ($SIGN_IDENTITY, hardened runtime)…"
+  # --options runtime: kütüphane enjeksiyonunu ve hata ayıklayıcı iliştirmeyi engeller.
+  # Klavye olaylarını gören bir uygulama için anlamlı bir sertleştirme; Erişilebilirlik
+  # izni imza gereksinimine (identifier + sertifika kökü) bağlı olduğu için korunuyor.
+  codesign --force --deep --options runtime --sign "$SIGN_IDENTITY" --identifier "$BUNDLE_ID" "$APP"
   STABLE_SIGN=1
 else
   echo "▸ İmzalanıyor (ad-hoc)…"
@@ -90,5 +96,5 @@ if [ "$RUN" = "1" ]; then
   osascript -e 'quit app "Kablo Kaşifi"' >/dev/null 2>&1 || true
   sleep 0.5
   open "$APP"
-  echo "✓ Çalıştırıldı — menü çubuğundaki ✨ simgesine bak."
+  echo "✓ Çalıştırıldı — menü çubuğundaki 🔌 simgesine bak."
 fi

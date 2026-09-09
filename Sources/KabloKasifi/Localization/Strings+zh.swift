@@ -61,6 +61,7 @@ extension KKStrings {
         deviceHubLimit: "设备支持 USB 3.x，但只连上了 480 Mb/s。瓶颈是它上面的 %@（工作在 USB 2.0）。",
         deviceCableLimit: "设备支持 USB 3.x，但只协商到 480 Mb/s。你的线缆很可能是只能充电的 USB 2.0 线 —— 换成数据线会快 10 倍。",
         linkSpeedUnknown: "读不到连接速率，所以我不会怪线缆、集线器或设备。",
+        usbVersionUnknown: "USB 版本未知",
 
         externalDisplay: "外接显示器",
         displayCarriesVideo: "这根线正在传输画面：%@。",

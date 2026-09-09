@@ -72,6 +72,7 @@ struct KKStrings: Sendable {
     let deviceHubLimit: String        // %@ = hub adı
     let deviceCableLimit: String
     let linkSpeedUnknown: String
+    let usbVersionUnknown: String
 
     // Ekranlar
     let externalDisplay: String

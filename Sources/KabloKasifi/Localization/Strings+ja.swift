@@ -61,6 +61,7 @@ extension KKStrings {
         deviceHubLimit: "デバイスは USB 3.x 対応ですが 480 Mb/s でリンクしています。制限しているのは手前の %@（USB 2.0 動作）です。",
         deviceCableLimit: "デバイスは USB 3.x 対応ですが 480 Mb/s でしかリンクしていません。ケーブルが充電専用（USB 2.0）の可能性が高く、データ用ケーブルなら 10 倍速くなります。",
         linkSpeedUnknown: "リンク速度が読み取れませんでした。ケーブルもハブもデバイスも決めつけません。",
+        usbVersionUnknown: "USB バージョン不明",
 
         externalDisplay: "外部ディスプレイ",
         displayCarriesVideo: "このケーブルは映像を通しています: %@。",

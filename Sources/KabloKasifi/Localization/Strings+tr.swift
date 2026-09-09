@@ -61,6 +61,7 @@ extension KKStrings {
         deviceHubLimit: "Aygıt USB 3.x destekliyor ama 480 Mb/s'de bağlı. Sınırlayan, üstündeki %@ (USB 2.0 hızında).",
         deviceCableLimit: "Aygıt USB 3.x destekliyor ama yalnızca 480 Mb/s'de bağlanmış. Kablo büyük ihtimalle sadece şarj/USB 2.0 kablosu — veri kablosuyla 10 kat hızlanır.",
         linkSpeedUnknown: "Bağlantı hızı okunamadı; bu yüzden kablo, hub ya da aygıt hakkında bir hüküm vermiyorum.",
+        usbVersionUnknown: "USB sürümü bilinmiyor",
 
         externalDisplay: "Harici ekran",
         displayCarriesVideo: "Bu kablo görüntü taşıyor: %@.",

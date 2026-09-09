@@ -29,6 +29,7 @@ final class ProbeStore: ObservableObject {
     private var pendingFullScan: DispatchWorkItem?
     private var knownIDs: Set<String> = []
     private var panelOpen = false
+    private var needsScanWhenPanelOpens = true
 
     private init() {
         launchAtLogin = (SMAppService.mainApp.status == .enabled)
@@ -51,8 +52,11 @@ final class ProbeStore: ObservableObject {
     private func handle(_ trigger: LiveMonitor.Trigger) {
         // Watt/pil her olayda anında güncellensin (saf IOKit, alt süreç yok).
         refreshPowerFast()
-        // Ağır tarama (Thunderbolt için system_profiler) kısa süre geciktirilir:
-        // tak/çıkarda IOKit art arda birkaç bildirim gönderiyor.
+        // Ağır tarama yalnızca panel açıkken: kapalıyken görünen tek şey menü
+        // çubuğundaki watt ve o zaten hızlı yoldan geliyor. (Aksi hâlde her
+        // tak/çıkarda iki system_profiler alt süreci açılıyordu.)
+        guard panelOpen else { needsScanWhenPanelOpens = true; return }
+        // Tak/çıkarda IOKit art arda birkaç bildirim gönderiyor; kısa gecikme.
         scheduleFullScan(after: trigger == .power ? 0.4 : 0.25)
     }
 
@@ -77,21 +81,27 @@ final class ProbeStore: ObservableObject {
         guard !isScanning else { return }
         isScanning = true
         let strings = L10n.shared.s
+        let names = SystemProbe.currentDisplayNames()   // NSScreen yalnızca ana aktörde
         Task.detached(priority: .userInitiated) {
-            let fresh = SystemProbe.probe(strings)
+            let fresh = SystemProbe.probe(strings, displayNames: names)
             await MainActor.run { self.apply(fresh) }
         }
     }
 
     func refreshSynchronously() {
-        apply(SystemProbe.probe(L10n.shared.s))
+        apply(SystemProbe.probe(L10n.shared.s, displayNames: SystemProbe.currentDisplayNames()))
     }
 
     private func apply(_ fresh: ProbeResult) {
         let ids = Set(fresh.devices.map(\.stableID)
                       + fresh.displays.map(\.stableID)
                       + fresh.ports.filter { !$0.isEmptyPort }.map(\.stableID))
-        newIDs = knownIDs.isEmpty ? [] : ids.subtracting(knownIDs)
+        // "YENİ" rozeti biriktirilir: eskiden her taramada sıfırlandığı için
+        // kullanıcı paneli açtığında rozet çoktan kaybolmuş oluyordu.
+        if !knownIDs.isEmpty {
+            newIDs.formUnion(ids.subtracting(knownIDs))
+        }
+        newIDs.formIntersection(ids)   // çıkarılan aygıtın rozeti kalmasın
         knownIDs = ids
         result = fresh
         isScanning = false
@@ -109,7 +119,10 @@ final class ProbeStore: ObservableObject {
     func panelAppeared() {
         panelOpen = true
         refreshPowerFast()
-        refresh()
+        if needsScanWhenPanelOpens || result.all.isEmpty {
+            needsScanWhenPanelOpens = false
+            refresh()
+        }
         backstopTimer?.invalidate()
         let t = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
@@ -122,12 +135,15 @@ final class ProbeStore: ObservableObject {
         panelOpen = false
         backstopTimer?.invalidate()
         backstopTimer = nil
+        // Kullanıcı gördü; rozetler bir sonraki değişikliğe kadar temizlensin.
+        newIDs.removeAll()
     }
 
     /// Menü çubuğunda gösterilecek kısa özet.
     var menuBarText: String? {
         if let watts = liveWatts, watts > 0 { return "\(watts) W" }
         let count = result.devices.count
-        return count > 0 ? "\(count)" : nil
+        // Çıplak "3" watt sanılabiliyordu; aygıt sayısı olduğu belli olsun.
+        return count > 0 ? "×\(count)" : nil
     }
 }

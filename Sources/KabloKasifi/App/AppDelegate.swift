@@ -24,7 +24,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let fitting = host.fittingSize
                 let text = "fittingSize: \(Int(fitting.width)) x \(Int(fitting.height))"
                 print(text)
-                try? text.write(toFile: "/tmp/kk-measure.txt", atomically: true, encoding: .utf8)
+                let path = NSTemporaryDirectory() + "kk-measure.txt"
+                try? text.write(toFile: path, atomically: true, encoding: .utf8)
+                print("yazıldı: \(path)")
             }
             NSApp.terminate(nil)
             return
@@ -32,7 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if args.contains("--doctor") {
             let text = SystemProbe.doctor()
             print(text)
-            try? text.write(toFile: "/tmp/kk-doctor.txt", atomically: true, encoding: .utf8)
+            let path = NSTemporaryDirectory() + "kk-doctor.txt"
+            try? text.write(toFile: path, atomically: true, encoding: .utf8)
+            print("yazıldı: \(path)")
             NSApp.terminate(nil)
             return
         }
@@ -45,7 +49,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             out += "\n" + SystemProbe.doctor() + "\n" 
             print(out)
-            try? out.write(toFile: "/tmp/kk-print.txt", atomically: true, encoding: .utf8)
+            let path = NSTemporaryDirectory() + "kk-print.txt"
+            try? out.write(toFile: path, atomically: true, encoding: .utf8)
+            print("yazıldı: \(path)")
             NSApp.terminate(nil)
             return
         }

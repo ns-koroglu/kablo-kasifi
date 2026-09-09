@@ -110,7 +110,17 @@ enum PowerProbe {
     static func battery() -> BatteryInfo {
         var info = BatteryInfo()
         guard let props = batteryProperties() else { return info }
-        info.percent = (props["CurrentCapacity"] as? NSNumber)?.intValue
+        // Apple Silicon'da CurrentCapacity doğrudan yüzde (MaxCapacity = 100),
+        // Intel'de mAh. Oranla hesaplamak ikisinde de doğru sonucu veriyor.
+        let current = (props["CurrentCapacity"] as? NSNumber)?.doubleValue
+        let maxCap = (props["MaxCapacity"] as? NSNumber)?.doubleValue
+        if let current {
+            if let maxCap, maxCap > 0, maxCap != 100 {
+                info.percent = Int((current / maxCap * 100).rounded())
+            } else {
+                info.percent = Int(current.rounded())
+            }
+        }
         info.isCharging = (props["IsCharging"] as? Bool) ?? false
         info.externalConnected = (props["ExternalConnected"] as? Bool) ?? false
         info.cycleCount = (props["CycleCount"] as? NSNumber)?.intValue

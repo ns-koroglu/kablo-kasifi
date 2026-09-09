@@ -41,8 +41,8 @@ rozetiyle işaretlenir (rozet dile bağlı olmayan kararlı kimliğe dayanır).
 🇹🇷 Türkçe (varsayılan) · 🇬🇧 English · 🇩🇪 Deutsch · 🇪🇸 Español · 🇫🇷 Français · 🇮🇹 Italiano · 🇵🇹 Português · 🇷🇺 Русский · 🇨🇳 简体中文 · 🇯🇵 日本語
 
 Uygulama açılışta **sistem diline** göre kendini ayarlar. Sistem dili bu on dilden
-biri değilse **Türkçe** kullanılır. Dili elle de seçebilirsin (menüdeki 🌐 düğmesi
-ya da Ayarlar → Genel → Dil); seçim kaydedilir ve anında uygulanır.
+biri değilse **Türkçe** kullanılır. Dili elle seçmek için panelin alt satırındaki
+🌐 düğmesini kullan; seçim kaydedilir ve anında uygulanır.
 
 Çeviriler `Sources/*/Localization/` altında, dil başına tek dosya. Metinler tek bir
 `struct` üzerinden tutulduğu için **eksik çeviri mümkün değil**: yeni bir metin
@@ -148,6 +148,17 @@ swift build -c release
 ./.build/release/KabloKasifi --doctor              # veri kaynaklarının durumu
 ./.build/release/KabloKasifi --render /tmp/p.png   # paneli PNG olarak çiz
 ```
+
+## Kaldırma
+
+```bash
+osascript -e 'quit app "Kablo Kaşifi"'
+rm -rf "/Applications/Kablo Kaşifi.app"
+defaults delete app.kablokasifi.mac
+```
+
+"Girişte başlat" açıksa uygulamayı silmeden önce kapat, yoksa macOS'ta hayalet bir
+giriş öğesi kalır (Sistem Ayarları → Genel → Giriş Öğeleri'nden de kaldırılabilir).
 
 ---
 

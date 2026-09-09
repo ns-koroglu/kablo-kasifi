@@ -61,6 +61,7 @@ extension KKStrings {
         deviceHubLimit: "El dispositivo admite USB 3.x pero está enlazado a 480 Mb/s. Lo limita el %@ que tiene por encima (a velocidad USB 2.0).",
         deviceCableLimit: "El dispositivo admite USB 3.x pero solo se ha enlazado a 480 Mb/s. Lo más probable es que tu cable sea de solo carga/USB 2.0: con uno de datos iría 10 veces más rápido.",
         linkSpeedUnknown: "No se ha podido leer la velocidad del enlace, así que no culpo al cable, al hub ni al dispositivo.",
+        usbVersionUnknown: "versión USB desconocida",
 
         externalDisplay: "Pantalla externa",
         displayCarriesVideo: "Este cable transporta vídeo: %@.",

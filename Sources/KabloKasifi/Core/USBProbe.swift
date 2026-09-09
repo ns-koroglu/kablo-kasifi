@@ -30,8 +30,10 @@ struct USBDeviceInfo: Sendable {
         return 0.48
     }
 
-    var usbVersionText: String {
-        guard let bcd = bcdUSB else { return "bilinmiyor" }
+    /// "USB 3.1" — bcdUSB okunamadıysa nil (metin katmanı yerelleştirilmiş
+    /// karşılığını koyar; burada sabit Türkçe dizge kalmıştı).
+    var usbVersionText: String? {
+        guard let bcd = bcdUSB else { return nil }
         let major = (bcd >> 8) & 0xFF
         let minor = (bcd >> 4) & 0x0F
         return "USB \(major).\(minor)"

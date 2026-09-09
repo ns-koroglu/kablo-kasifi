@@ -14,12 +14,14 @@ enum SystemProbe {
 
     // MARK: - Giriş
 
-    static func probe(_ s: KKStrings) -> ProbeResult {
+    /// - Parameter displayNames: ekran adları ana aktörde toplanır; NSScreen'e
+    ///   arka plan iş parçacığından erişmek güvenli değil.
+    static func probe(_ s: KKStrings, displayNames: [CGDirectDisplayID: String] = [:]) -> ProbeResult {
         var result = ProbeResult()
         let usb = USBProbe.devices(fallbackName: s.usbDeviceFallback)
         result.devices = usbRows(usb, s)
         result.power = powerRows(s)
-        result.displays = displayRows(s)
+        result.displays = displayRows(s, names: displayNames)
         let (ports, warning) = thunderboltRows(s)
         result.ports = ports
         result.failure = warning
@@ -47,7 +49,7 @@ enum SystemProbe {
     private static func subtitle(for device: USBDeviceInfo, in all: [USBDeviceInfo], _ s: KKStrings) -> String {
         var parts: [String] = []
         if !device.vendor.isEmpty { parts.append(device.vendor) }
-        parts.append(String(format: s.deviceVersionSuffix, device.usbVersionText))
+        parts.append(String(format: s.deviceVersionSuffix, device.usbVersionText ?? s.usbVersionUnknown))
         if let parent = USBProbe.parent(of: device, in: all) {
             parts.append(String(format: s.viaParent, parent.name))
         }
@@ -75,7 +77,8 @@ enum SystemProbe {
             out.append(Verdict(level: .good, text: String(format: s.deviceFast, speedText(link))))
         } else if capability <= 0.48 {
             // Suçlu kablo değil, aygıtın kendisi
-            out.append(Verdict(level: .info, text: String(format: s.deviceOwnLimit, device.usbVersionText)))
+            out.append(Verdict(level: .info,
+                               text: String(format: s.deviceOwnLimit, device.usbVersionText ?? s.usbVersionUnknown)))
         } else if let parent, (parent.linkGbps ?? 0) < 5 {
             out.append(Verdict(level: .warn, text: String(format: s.deviceHubLimit, parent.name)))
         } else {
@@ -213,7 +216,7 @@ enum SystemProbe {
 
     // MARK: - Ekranlar (CoreGraphics)
 
-    private static func displayRows(_ s: KKStrings) -> [Connection] {
+    private static func displayRows(_ s: KKStrings, names: [CGDirectDisplayID: String] = [:]) -> [Connection] {
         var count: UInt32 = 0
         guard CGGetOnlineDisplayList(0, nil, &count) == .success, count > 0 else { return [] }
         var ids = [CGDirectDisplayID](repeating: 0, count: Int(count))
@@ -225,7 +228,7 @@ enum SystemProbe {
             let width = mode?.pixelWidth ?? 0
             let height = mode?.pixelHeight ?? 0
             let refresh = mode?.refreshRate ?? 0
-            let name = screenName(for: id) ?? s.externalDisplay
+            let name = names[id] ?? s.externalDisplay
 
             var resolution = "\(width) × \(height)"
             if refresh > 0 { resolution += String(format: " @ %.0f Hz", refresh) }
@@ -242,14 +245,16 @@ enum SystemProbe {
         return out
     }
 
-    private static func screenName(for id: CGDirectDisplayID) -> String? {
+    /// Ana aktörde çağrılmalı (NSScreen iş parçacığı güvenli değil).
+    @MainActor
+    static func currentDisplayNames() -> [CGDirectDisplayID: String] {
+        var map: [CGDirectDisplayID: String] = [:]
         for screen in NSScreen.screens {
-            if let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber,
-               number.uint32Value == id {
-                return screen.localizedName
+            if let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+                map[number.uint32Value] = screen.localizedName
             }
         }
-        return nil
+        return map
     }
 
     // MARK: - Thunderbolt (system_profiler, tip adı çalışma anında bulunur)
@@ -358,8 +363,13 @@ enum SystemProbe {
         p.standardOutput = pipe
         p.standardError = FileHandle.nullDevice
         do { try p.run() } catch { return nil }
+        // Zaman aşımı olmadan takılan bir alt süreç, isScanning mandalını kalıcı
+        // olarak kilitleyip tüm taramaları durduruyordu.
+        let watchdog = DispatchWorkItem { if p.isRunning { p.terminate() } }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 8, execute: watchdog)
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
+        watchdog.cancel()
         return data
     }
 

@@ -61,6 +61,7 @@ extension KKStrings {
         deviceHubLimit: "Le périphérique gère l'USB 3.x mais négocie 480 Mb/s. C'est le %@ en amont qui limite (il fonctionne en USB 2.0).",
         deviceCableLimit: "Le périphérique gère l'USB 3.x mais ne négocie que 480 Mb/s. Ton câble est très probablement un câble de charge/USB 2.0 — un câble de données le rendrait 10× plus rapide.",
         linkSpeedUnknown: "La vitesse de liaison n'a pas pu être lue : je n'accuse donc ni le câble, ni le hub, ni le périphérique.",
+        usbVersionUnknown: "version USB inconnue",
 
         externalDisplay: "Écran externe",
         displayCarriesVideo: "Ce câble transporte la vidéo : %@.",
